@@ -27,48 +27,37 @@
         ///  the contents of this method with the code editor.
         /// </summary>
         private void InitializeComponent() {
-            button1 = new Button();
-            labelGold = new Label();
-            barProgress = new ProgressBar();
+            labelClickCount = new Label();
+            buttonClickMe = new Button();
             SuspendLayout();
             // 
-            // button1
+            // labelClickCount
             // 
-            button1.Location = new Point(498, 285);
-            button1.Name = "button1";
-            button1.Size = new Size(77, 43);
-            button1.TabIndex = 0;
-            button1.Text = "button1";
-            button1.UseVisualStyleBackColor = true;
+            labelClickCount.AutoSize = true;
+            labelClickCount.Location = new Point(86, 135);
+            labelClickCount.Name = "labelClickCount";
+            labelClickCount.Size = new Size(61, 20);
+            labelClickCount.TabIndex = 4;
+            labelClickCount.Text = "Clicks: 0";
             // 
-            // labelGold
+            // buttonClickMe
             // 
-            labelGold.AutoSize = true;
-            labelGold.Location = new Point(467, 192);
-            labelGold.Name = "labelGold";
-            labelGold.Size = new Size(56, 20);
-            labelGold.TabIndex = 1;
-            labelGold.Text = "Gold: 0";
-            labelGold.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // barProgress
-            // 
-            barProgress.Location = new Point(451, 361);
-            barProgress.Name = "barProgress";
-            barProgress.Size = new Size(222, 44);
-            barProgress.TabIndex = 2;
+            buttonClickMe.Location = new Point(91, 192);
+            buttonClickMe.Name = "buttonClickMe";
+            buttonClickMe.Size = new Size(82, 46);
+            buttonClickMe.TabIndex = 5;
+            buttonClickMe.Text = "Click Me";
+            buttonClickMe.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
-            Controls.Add(barProgress);
-            Controls.Add(labelGold);
-            Controls.Add(button1);
+            Controls.Add(buttonClickMe);
+            Controls.Add(labelClickCount);
             Name = "Form1";
             Text = "Form1";
-            Load += Form1_Load;
             ResumeLayout(false);
             PerformLayout();
         }
@@ -78,5 +67,8 @@
         private Button button1;
         private Label labelGold;
         private ProgressBar barProgress;
+        private Button button2;
+        private Label labelClickCount;
+        private Button buttonClickMe;
     }
 }

@@ -9,7 +9,7 @@ namespace ProjWizInc.Core.ADT
     public class ArrList<T>
     {
         private T[] _elements;
-        public int Count 
+        public int Count;
 
     }
 }

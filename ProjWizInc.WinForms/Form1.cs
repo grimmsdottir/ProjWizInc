@@ -12,14 +12,14 @@ namespace ProjWizInc.WinForms
 
         public Form1() {
             InitializeComponent();
+            InitializeGameArchitecture();
         }
         private void InitializeGameArchitecture() {
             EventBroker eventBroker = new();
             _taskLogic = new TaskLogic();
-            _loopManager = new GameLoopManager(_taskLogic,eventBroker);
+            _loopManager = new GameLoopManager(_taskLogic, eventBroker);
 
-            eventBroker.Subscribe("RenderFrameRequested", (data) => RefreshUiDisplay());
-
+            
             _frameStopwatch = new Stopwatch();
             _frameStopwatch.Start();
 
@@ -41,13 +41,15 @@ namespace ProjWizInc.WinForms
             labelGold.Text = $"Gold: {goldCount}";
 
             double progressPercent = currentProgress / duration * 100;
-            if (progressPercent <0) { progressPercent = 0; }
+            if (progressPercent < 0) { progressPercent = 0; }
             if (progressPercent > 100) { progressPercent = 100; }
 
             barProgress.Value = (int)progressPercent;
         }
+        private void Form1_Load() {
 
-        private void Form1_Load(object sender, EventArgs e) {
+        }
+        private void buttonClick_Click(object sender, EventArgs e) {
 
         }
     }

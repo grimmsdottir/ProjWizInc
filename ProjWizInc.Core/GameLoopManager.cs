@@ -20,11 +20,11 @@ namespace ProjWizInc.Core {
                 realSecondsPassed = 0.25;
             }
             _timeAccumalator += realSecondsPassed * speedMult;
-            while (_timeAccumalator > 0) {
+            while (_timeAccumalator >= TimePerTick) {
                 _taskLogic.Update(TimePerTick);
                 _timeAccumalator -= TimePerTick;
             }
-            _eventBroker.Publish("RenderFrameRequested", null);
+            //_eventBroker.Publish("RenderFrameRequested", null);
         }
     }
 }

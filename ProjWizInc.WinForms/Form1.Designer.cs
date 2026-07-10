@@ -27,35 +27,75 @@
         ///  the contents of this method with the code editor.
         /// </summary>
         private void InitializeComponent() {
-            labelClickCount = new Label();
-            buttonClickMe = new Button();
+            labelTimer = new Label();
+            button1 = new Button();
+            button2 = new Button();
+            progressBar1 = new ProgressBar();
+            progressBar2 = new ProgressBar();
+            labelGold = new Label();
             SuspendLayout();
             // 
-            // labelClickCount
+            // labelTimer
             // 
-            labelClickCount.AutoSize = true;
-            labelClickCount.Location = new Point(86, 135);
-            labelClickCount.Name = "labelClickCount";
-            labelClickCount.Size = new Size(61, 20);
-            labelClickCount.TabIndex = 4;
-            labelClickCount.Text = "Clicks: 0";
+            labelTimer.AutoSize = true;
+            labelTimer.Location = new Point(67, 40);
+            labelTimer.Name = "labelTimer";
+            labelTimer.Size = new Size(57, 20);
+            labelTimer.TabIndex = 0;
+            labelTimer.Text = "Time: 0";
             // 
-            // buttonClickMe
+            // button1
             // 
-            buttonClickMe.Location = new Point(91, 192);
-            buttonClickMe.Name = "buttonClickMe";
-            buttonClickMe.Size = new Size(82, 46);
-            buttonClickMe.TabIndex = 5;
-            buttonClickMe.Text = "Click Me";
-            buttonClickMe.UseVisualStyleBackColor = true;
+            button1.Location = new Point(82, 160);
+            button1.Name = "button1";
+            button1.Size = new Size(94, 29);
+            button1.TabIndex = 1;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(82, 195);
+            button2.Name = "button2";
+            button2.Size = new Size(94, 29);
+            button2.TabIndex = 2;
+            button2.Text = "button2";
+            button2.UseVisualStyleBackColor = true;
+            // 
+            // progressBar1
+            // 
+            progressBar1.Location = new Point(182, 160);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(125, 29);
+            progressBar1.TabIndex = 3;
+            // 
+            // progressBar2
+            // 
+            progressBar2.Location = new Point(182, 195);
+            progressBar2.Name = "progressBar2";
+            progressBar2.Size = new Size(125, 29);
+            progressBar2.TabIndex = 4;
+            // 
+            // labelGold
+            // 
+            labelGold.AutoSize = true;
+            labelGold.Location = new Point(67, 60);
+            labelGold.Name = "labelGold";
+            labelGold.Size = new Size(44, 20);
+            labelGold.TabIndex = 5;
+            labelGold.Text = "Gold:";
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
-            Controls.Add(buttonClickMe);
-            Controls.Add(labelClickCount);
+            Controls.Add(labelGold);
+            Controls.Add(progressBar2);
+            Controls.Add(progressBar1);
+            Controls.Add(button2);
+            Controls.Add(button1);
+            Controls.Add(labelTimer);
             Name = "Form1";
             Text = "Form1";
             ResumeLayout(false);
@@ -64,11 +104,11 @@
 
         #endregion
 
+        private Label labelTimer;
         private Button button1;
-        private Label labelGold;
-        private ProgressBar barProgress;
         private Button button2;
-        private Label labelClickCount;
-        private Button buttonClickMe;
+        private ProgressBar progressBar1;
+        private ProgressBar progressBar2;
+        private Label labelGold;
     }
 }

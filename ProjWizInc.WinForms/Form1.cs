@@ -1,56 +1,34 @@
-using ProjWizInc.Core;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
 using System.Diagnostics;
 
 namespace ProjWizInc.WinForms
 {
     public partial class Form1 : Form {
-        private GameLoopManager _loopManager;
-        private TaskLogic _taskLogic;
-        private System.Windows.Forms.Timer _uiFrameTimer;
-        private Stopwatch _frameStopwatch;
-        private const double _SPEED_MULT = 1;
+        private readonly ContextManager _context;
 
         public Form1() {
             InitializeComponent();
-            InitializeGameArchitecture();
+            _context = ContextManager.Instance;
+            _context.Subscribe<UpdateRenderEvent>(UpdateUI);
+            _context.Start();
         }
-        private void InitializeGameArchitecture() {
-            EventBroker eventBroker = new();
-            _taskLogic = new TaskLogic();
-            _loopManager = new GameLoopManager(_taskLogic, eventBroker);
-
-            
-            _frameStopwatch = new Stopwatch();
-            _frameStopwatch.Start();
-
-            _uiFrameTimer = new System.Windows.Forms.Timer();
-            _uiFrameTimer.Interval = 16;
-            _uiFrameTimer.Tick += OnVisualFrameTick;
-            _uiFrameTimer.Start();
+        protected override void OnLoad(EventArgs e) {
+            base.OnLoad(e);
         }
-        private void OnVisualFrameTick(Object sender, EventArgs e) {
-            double realSecondsPassed = _frameStopwatch.Elapsed.TotalSeconds;
-            _frameStopwatch.Restart();
-            _loopManager.Update(realSecondsPassed, _SPEED_MULT);
+        protected override void OnFormClosed(FormClosedEventArgs e) {
+            base.OnFormClosed(e);
+            _context.Unsubscribe<UpdateRenderEvent>(UpdateUI);
         }
-        private void RefreshUiDisplay() {
-            double goldCount = _taskLogic.CurrentTask.Gold;
-            double currentProgress = _taskLogic.CurrentTask.Progress;
-            double duration = _taskLogic.CurrentTask.Duration;
-
-            labelGold.Text = $"Gold: {goldCount}";
-
-            double progressPercent = currentProgress / duration * 100;
-            if (progressPercent < 0) { progressPercent = 0; }
-            if (progressPercent > 100) { progressPercent = 100; }
-
-            barProgress.Value = (int)progressPercent;
-        }
-        private void Form1_Load() {
-
-        }
-        private void buttonClick_Click(object sender, EventArgs e) {
-
+        private void UpdateUI(UpdateRenderEvent e) {
+            // Check if we need to marshal to the UI thread
+            if (labelTimer.InvokeRequired) {
+                labelTimer.BeginInvoke(() => UpdateUI(e));
+                return;
+            }
+            long time = 0;
+            labelTimer.Text = "Time: " + time;
         }
     }
 }

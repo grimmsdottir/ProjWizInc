@@ -1,0 +1,561 @@
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Data\Globals.cs 
+============================================================================== 
+ 
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Data {
+    public static class Globals {
+        public const int TICKS_PER_SECOND = 100;
+        public const int FRAMES_PER_SECOND = 60;
+
+        public static readonly double TICK_LENGTH = 1.0 / TICKS_PER_SECOND;
+        public static readonly double FRAME_LENGTH_MS = 1000.0 / FRAMES_PER_SECOND;
+    }
+    
+
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs 
+============================================================================== 
+ 
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Events {
+    public readonly record struct UpdateRenderEvent();
+    public readonly record struct UpdateLogicEvent();
+    public readonly record struct AppStartedEvent(string Message);
+    public readonly record struct GameStartedEvent();
+    public readonly record struct TimeAdvancedEvent(long CurrentTime);
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.System;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    public class ContextManager {
+        private readonly EventBroker _event;
+        private readonly TimeManager _time;
+        private readonly ProfileManager _profile;
+        private readonly GameLoopManager _gameLoop;
+        public static ContextManager Instance { get; } = new ContextManager();
+        private ContextManager() { 
+            _event = new EventBroker();
+            _time = new TimeManager(_event);
+            _profile = new ProfileManager(_event);
+            _gameLoop = new GameLoopManager(_event);
+        }
+        public void Start() {
+            _gameLoop.Start();
+        }
+        public void Subscribe<T>(Action<T> handler) {
+            _event.Subscribe(handler);
+        }
+        public void Unsubscribe<T>(Action<T> handler) {
+            _event.Unsubscribe(handler);
+        }
+        public void Publish<T>(T eventArgs) {
+            _event.Publish(eventArgs);
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventBroker.cs 
+============================================================================== 
+ 
+﻿using System;
+using System.Collections.Generic;
+
+namespace ProjWizInc.Core.Managers {
+    /*
+     * So the way the EventBroker works is basically as a broker
+     * During bootup, Module A Subcribes to the EventBroker with an EventName and Function
+     * IE: The renderer subscribes "RenderFramePls", RenderFrame(), and waits
+     * During runtime, Module B publishes to the EventBroker with an EventName and Argument
+     * IE: The tick manager decides that it is time for the next frame to be rendered, and publishes
+     * "RenderFramePls",SomeData.
+     * The EventBroker then sees that "RenderFramePls" is in the subscriptions, and runs RenderFrame()
+     * TLDR: Subscription is "do thing if this event" and publishing is "this event happened"
+     *
+     * 2nd pass, now with funky typing instead of plain strings for event names
+     * our subscriptions are now based on Type and Delegate
+     * Type is typeOf(something), and Delegate is the parent of Action, because idk
+     * Also, upgraded to a singleton so we have global access to all events for everyone
+     * 
+     * 3rd pass, apparently using new 160 times a second causes problems for the GC, so we swap to an array instead
+     * it bypasses collection change errors by using an array. if any changes happen, the currently running publish
+     * will continue working with the old array, and use the new array next loop
+     */
+    public class EventBroker{
+        private readonly Dictionary<Type, Delegate[]> _subscribers = [];
+        //we use this funky thing as a lock to make it thread safe and prevent race conditions
+        private readonly object _lock = new object();
+        public void Subscribe<T>(Action<T> handler) {
+            var type = typeof(T);
+            lock (_lock) {
+                //like before, we check if the Event(type) already exists, and create it if it doesnt
+                if (!_subscribers.TryGetValue(type, out var oldArray)) {
+                    oldArray = Array.Empty<Delegate>();
+                }
+                //then we add a new Function(handler) used to be called callback
+                //but now in the 3rd pass, we aren using a list anymore, so we gotta do an old school manual array
+                //expansion
+                var newArr = new Delegate[oldArray.Length + 1];
+                Array.Copy(oldArray, newArr, oldArray.Length);
+                newArr[^1] = handler;
+                _subscribers[type] = newArr;
+                //this does have the old heap problem, but subs dont run 160hz
+            }
+
+        }
+        public void Unsubscribe<T>(Action<T> handler) {
+            var type = typeof(T);
+            lock (_lock) {
+                if (_subscribers.TryGetValue(type, out var oldArray)) {
+                    // Find where this handler lives in our array
+                    int index = Array.IndexOf(oldArray, handler);
+                    if (index >= 0) {
+                        // If it's the last subscriber standing, remove the event completely
+                        if (oldArray.Length == 1) {
+                            _subscribers.Remove(type);
+                        } else {
+                            // Otherwise, allocate a new array (-1 size) and skip the removed handler
+                            var newArray = new Delegate[oldArray.Length - 1];
+
+                            // Copy everything before the removed item
+                            if (index > 0) {
+                                Array.Copy(oldArray, 0, newArray, 0, index);
+                            }
+                            // Copy everything after the removed item
+                            if (index < oldArray.Length - 1) {
+                                Array.Copy(oldArray, index + 1, newArray, index, oldArray.Length - index - 1);
+                            }
+
+                            _subscribers[type] = newArray; // Atomic pointer swap
+                        }
+                    }
+                } else {
+                    // log if we tried to unsubscribe from something that was never subscribed
+                }
+            }
+            
+        }
+        public void Publish<T>(T eventArgs) {
+            Delegate[]? handlers;
+            lock (_lock) {
+                _subscribers.TryGetValue(typeof(T), out handlers);
+            }
+            // Iterates directly over the array for zero-allocation
+            if (handlers != null) {
+                foreach (var h in handlers) {
+                    ((Action<T>)h)(eventArgs);
+                }
+            }
+
+        }
+
+
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\GameLoopManager.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Events;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using static ProjWizInc.Core.Data.Globals;
+
+namespace ProjWizInc.Core.System {
+    
+    public class GameLoopManager {
+        
+        private double _timeAccumulator = 0;
+        private readonly Stopwatch _stopwatch;
+        //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
+        private CancellationTokenSource _cts;
+        private readonly EventBroker _events;
+        public GameLoopManager(EventBroker events) {
+            _stopwatch = new Stopwatch();
+            _events = events;
+
+        }
+        public void Start() {
+            //if it is not null, that means that the Manager has already started, so this stops duplicating runs
+            if (_cts != null) {
+                //todo: log it
+                return;
+            }
+            _cts = new CancellationTokenSource();
+            _stopwatch.Start();
+            //this one line kicks off the whole actual loop
+            Task.Run(() => RunLoopAsync(_cts.Token));
+        }
+        public void Init() {
+        }
+        public void Stop() {
+            //???
+            _cts?.Cancel();
+            _stopwatch.Stop();
+            _cts = null;
+        }
+        private async Task RunLoopAsync(CancellationToken token) {
+            //PeriodicTimer is another clock timer thing that is used for async and awaiting stuff
+            //less accurate than Stopwatch, but Stopwatch cant control CPU flow
+            //even though its less accurate, we dont need it to be super accurate because we have the accumalator
+            //to catch up to it and stuff
+            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(FRAME_LENGTH_MS));
+            while (!token.IsCancellationRequested && await periodicTimer.WaitForNextTickAsync(token)) {
+                double secondsPassed = _stopwatch.Elapsed.TotalSeconds;
+                _stopwatch.Restart();
+                //we cap the time passed so we dont melt the CPU with our CPU burst later
+                if (secondsPassed > 0.25) secondsPassed = 0.25;
+                _timeAccumulator += secondsPassed;
+                //this lets us decouple UPS from FPS, 
+                while (_timeAccumulator >= TICK_LENGTH) {
+                    LogicStep();
+                    _timeAccumulator -= TICK_LENGTH;
+                }
+                RenderStep();
+            }
+        }
+        private void LogicStep() {
+            _events.Publish(new UpdateLogicEvent());
+        }
+        private void RenderStep() {
+            _events.Publish(new UpdateRenderEvent());
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ProfileManager.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.System {
+    
+    public class ProfileManager{
+        private readonly EventBroker _events;
+        public ProfileManager(EventBroker events) {
+            _events = events; 
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public void Init() {
+        }
+        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
+        //but if we change UpdateFrameEvent with parameters later, we can check it with e
+        public void Update(UpdateLogicEvent e) {
+            
+        }
+
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TaskLogic.cs 
+============================================================================== 
+ 
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.System {
+    internal class TaskLogic {
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    public class TimeState {
+        public long TimeElapsed;
+        public int TicksElapsed;
+    }
+    public class TimeManager {
+        private readonly EventBroker _events;
+        private readonly TimeState _state;
+
+        public TimeManager(EventBroker events) {
+            _events = events;
+            _state = new TimeState();
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public void Init() {
+        }
+        public long GetTime() {
+            return _state.TimeElapsed;
+        }
+        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
+        //but if we change UpdateFrameEvent with parameters later, we can check it with e
+        public void Update(UpdateLogicEvent e) {
+            AdvanceTick();
+        }
+        private void AdvanceTick() {
+            _state.TicksElapsed++;
+            if (_state.TicksElapsed >= Globals.TICKS_PER_SECOND) {
+                _state.TicksElapsed -= Globals.TICKS_PER_SECOND;
+                _state.TimeElapsed++;
+            }
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\MainGameState.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Data;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States {
+    public class MainGameState {
+        public static MainGameState Instance { get; } = new MainGameState() {};
+        private MainGameState() { }
+        
+
+    }
+    
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs 
+============================================================================== 
+ 
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
+using System.Diagnostics;
+
+namespace ProjWizInc.WinForms
+{
+    public partial class Form1 : Form {
+        private readonly ContextManager _context;
+
+        public Form1() {
+            InitializeComponent();
+            _context = ContextManager.Instance;
+            _context.Subscribe<UpdateRenderEvent>(UpdateUI);
+            _context.Start();
+        }
+        protected override void OnLoad(EventArgs e) {
+            base.OnLoad(e);
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) {
+            base.OnFormClosed(e);
+            _context.Unsubscribe<UpdateRenderEvent>(UpdateUI);
+        }
+        private void UpdateUI(UpdateRenderEvent e) {
+            // Check if we need to marshal to the UI thread
+            if (labelTimer.InvokeRequired) {
+                labelTimer.BeginInvoke(() => UpdateUI(e));
+                return;
+            }
+            long time = 0;
+            labelTimer.Text = "Time: " + time;
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs 
+============================================================================== 
+ 
+﻿namespace ProjWizInc.WinForms
+{
+    partial class Form1
+    {
+        /// <summary>
+        ///  Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        ///  Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        ///  Required method for Designer support - do not modify
+        ///  the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent() {
+            labelTimer = new Label();
+            button1 = new Button();
+            button2 = new Button();
+            progressBar1 = new ProgressBar();
+            progressBar2 = new ProgressBar();
+            labelGold = new Label();
+            SuspendLayout();
+            // 
+            // labelTimer
+            // 
+            labelTimer.AutoSize = true;
+            labelTimer.Location = new Point(67, 40);
+            labelTimer.Name = "labelTimer";
+            labelTimer.Size = new Size(57, 20);
+            labelTimer.TabIndex = 0;
+            labelTimer.Text = "Time: 0";
+            // 
+            // button1
+            // 
+            button1.Location = new Point(82, 160);
+            button1.Name = "button1";
+            button1.Size = new Size(94, 29);
+            button1.TabIndex = 1;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(82, 195);
+            button2.Name = "button2";
+            button2.Size = new Size(94, 29);
+            button2.TabIndex = 2;
+            button2.Text = "button2";
+            button2.UseVisualStyleBackColor = true;
+            // 
+            // progressBar1
+            // 
+            progressBar1.Location = new Point(182, 160);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(125, 29);
+            progressBar1.TabIndex = 3;
+            // 
+            // progressBar2
+            // 
+            progressBar2.Location = new Point(182, 195);
+            progressBar2.Name = "progressBar2";
+            progressBar2.Size = new Size(125, 29);
+            progressBar2.TabIndex = 4;
+            // 
+            // labelGold
+            // 
+            labelGold.AutoSize = true;
+            labelGold.Location = new Point(67, 60);
+            labelGold.Name = "labelGold";
+            labelGold.Size = new Size(44, 20);
+            labelGold.TabIndex = 5;
+            labelGold.Text = "Gold:";
+            // 
+            // Form1
+            // 
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(800, 450);
+            Controls.Add(labelGold);
+            Controls.Add(progressBar2);
+            Controls.Add(progressBar1);
+            Controls.Add(button2);
+            Controls.Add(button1);
+            Controls.Add(labelTimer);
+            Name = "Form1";
+            Text = "Form1";
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        private Label labelTimer;
+        private Button button1;
+        private Button button2;
+        private ProgressBar progressBar1;
+        private ProgressBar progressBar2;
+        private Label labelGold;
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs 
+============================================================================== 
+ 
+namespace ProjWizInc.WinForms
+{
+    internal static class Program
+    {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            // To customize application configuration such as set high DPI settings or default font,
+            // see https://aka.ms/applicationconfiguration.
+            ApplicationConfiguration.Initialize();
+
+            Application.Run(new Form1());
+        }
+    }
+} 
+ 

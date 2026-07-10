@@ -7,12 +7,13 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    internal class TaskManager {
+    internal class JobManager {
         private readonly EventBroker _events;
         private readonly ResourceState _resources;
-        private readonly List<TaskState> _state = [];
+        private readonly List<JobState> _state = [];
+        private JobState _currentJob;
         public string? ActiveTaskId { get; private set; } = null;
-        public TaskManager(EventBroker events, ResourceManager resourceManager) {
+        public JobManager(EventBroker events, ResourceManager resourceManager) {
             _events = events;
             _resources = resourceManager.State;
             _events.Subscribe<UpdateLogicEvent>(Update);
@@ -24,13 +25,19 @@ namespace ProjWizInc.Core.Managers {
         }
         public void Update(UpdateLogicEvent e) {
             if (ActiveTaskId == null) { return; }
-            TaskState? activeTask = null ;
-            foreach (var task in _state) { 
-                if (task.Id == ActiveTaskId) {
-                    activeTask = task; break;
+            JobState? activeTask = null;
+            if (ActiveTaskId != _currentJob.Id) {
+                foreach (var task in _state) {
+                    if (task.Id == ActiveTaskId) {
+                        activeTask = task; 
+                        _currentJob = task;
+                        break;
+                    }
                 }
+                if (activeTask == null) { return; }
+            } else {
+                activeTask = _currentJob;
             }
-            if (activeTask == null) { return; };
             activeTask.Progress++;
             if (activeTask.Progress >= activeTask.TicksRequired) {
                 activeTask.Progress -= activeTask.TicksRequired;

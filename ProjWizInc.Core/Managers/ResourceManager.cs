@@ -19,6 +19,7 @@ namespace ProjWizInc.Core.Managers {
         
         private readonly EventBroker _events;
         private readonly ResourceState _state = new();
+        private readonly object _lock = new ();
         public ResourceManager(EventBroker events) {
             _events = events; 
             _events.Subscribe<UpdateLogicEvent>(Update);
@@ -43,16 +44,21 @@ namespace ProjWizInc.Core.Managers {
             
         }
         public void AddResource(int resourceID, long amount) {
-            if (!_state.Resources.ContainsKey(resourceID)) {
-                _state.Resources[resourceID] = 0;
-            }
-            _state.Resources[resourceID] += amount;
+            lock (_lock) {
+                if (!_state.Resources.ContainsKey(resourceID)) {
+                    _state.Resources[resourceID] = 0;
+                }
+                _state.Resources[resourceID] += amount;
+            }            
         }
         public long GetResource(int resourceID) {
-            if (!_state.Resources.ContainsKey(resourceID)) {
-                _state.Resources[resourceID] = 0;
+            lock (_lock) {
+                if (!_state.Resources.ContainsKey(resourceID)) {
+                    _state.Resources[resourceID] = 0;
+                }
+                return _state.Resources[resourceID];
             }
-            return _state.Resources[resourceID];
+           
 
         }
 

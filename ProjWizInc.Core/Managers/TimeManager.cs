@@ -14,11 +14,11 @@ namespace ProjWizInc.Core.Managers {
     }
     public class TimeManager {
         private readonly EventBroker _events;
-        private readonly TimeState _state;
+        private readonly TimeState _state = new();
+        public TimeState State => _state;
 
         public TimeManager(EventBroker events) {
             _events = events;
-            _state = new TimeState();
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public void Init() {

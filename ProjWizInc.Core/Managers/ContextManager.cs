@@ -30,5 +30,8 @@ namespace ProjWizInc.Core.Managers {
         public void Publish<T>(T eventArgs) {
             _event.Publish(eventArgs);
         }
+        public TimeState GetTimeState() {
+            return _time.State;
+        }
     }
 }

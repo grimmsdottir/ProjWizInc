@@ -1,5 +1,5 @@
 # --- Configuration ---
-$OutputFile = "z_SolutionContext.txt"
+$OutputFile = "z_SolutionChanges.txt"
 $MarkerFile = ".last_run_marker"
 $ExcludeFolders = @("bin", "obj", ".vs", "Properties")
 

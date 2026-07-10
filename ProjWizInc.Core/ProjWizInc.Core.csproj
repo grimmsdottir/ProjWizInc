@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Folder Include="ADT\" />
+    <Folder Include="Data\EntityData\" />
   </ItemGroup>
 
 </Project>

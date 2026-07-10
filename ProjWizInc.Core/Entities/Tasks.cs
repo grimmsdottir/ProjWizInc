@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Managers {
-    internal class TaskLogic {
+namespace ProjWizInc.Core.Entities {
+    internal class Tasks {
     }
 }

@@ -11,7 +11,13 @@ namespace ProjWizInc.Core.Data {
 
         public static readonly double TICK_LENGTH = 1.0 / TICKS_PER_SECOND;
         public static readonly double FRAME_LENGTH_MS = 1000.0 / FRAMES_PER_SECOND;
+
+        
     }
-    
+    public enum ResourceType {
+        Gold,
+        Wood,
+        Stone
+    }
 
 }

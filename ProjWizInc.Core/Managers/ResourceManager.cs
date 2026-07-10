@@ -8,13 +8,21 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    
-    public class ProfileManager{
+
+    public class ResourceState {
+        public long Gold { get; set; }
+        public long Wood { get; set; }
+        public long Stone { get; set; }
+    }
+    public class ResourceManager{
+        
         private readonly EventBroker _events;
-        public ProfileManager(EventBroker events) {
+        private readonly ResourceState _state = new();
+        public ResourceManager(EventBroker events) {
             _events = events; 
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
+        public ResourceState State => _state;
         public void Init() {
         }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons

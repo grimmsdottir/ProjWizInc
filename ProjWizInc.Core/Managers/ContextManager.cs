@@ -9,13 +9,13 @@ namespace ProjWizInc.Core.Managers {
     public class ContextManager {
         private readonly EventBroker _event;
         private readonly TimeManager _time;
-        private readonly ProfileManager _profile;
+        private readonly ResourceManager _profile;
         private readonly GameLoopManager _gameLoop;
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _event = new EventBroker();
             _time = new TimeManager(_event);
-            _profile = new ProfileManager(_event);
+            _profile = new ResourceManager(_event);
             _gameLoop = new GameLoopManager(_event);
         }
         public void Start() {

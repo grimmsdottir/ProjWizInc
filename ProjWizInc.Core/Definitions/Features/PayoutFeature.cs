@@ -5,19 +5,25 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Resources;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Features {
     internal class ResourcePayoutEntry : EntryInterface {
-        public int ResourceID { get; internal set; }
+        public string ResourceKey {  get; internal set; }
         public BigNum Ammount { get; internal set; }
+        //we ignore resourceIDs because it is generated on bootup and not important
+        [JsonIgnore]
+        public int ResourceID { get; internal set; }
+        
     }
     internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
-            foreach (var entry in PayoutEntries) {
-                entry.ResourceID = manager.;
-            }
+            foreach (ResourcePayoutEntry entry in PayoutEntries) {
+                entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
+                entry.Ammount = manager.GetDefinition<ResourceDefinition>(entry.ResourceID).GetFeature<>
+            }   
         }
         public void Payout(ResourceManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {

@@ -74,12 +74,17 @@ namespace ProjWizInc.Core.Definitions {
                 }
             }
         }
+        //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
             if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
                 var typedArray = (T[])array;
                 return typedArray[id];
             }
             return null;
+        }
+        //primarily used by defs for linking
+        public int GetID<T>(string key) where T:DefinitionBase{
+            return _typeKeyIdMap[typeof (T)][key];
         }
         private string GetConfigPath(string fileName) {
             //for when we are done done then we place this next to the .exe

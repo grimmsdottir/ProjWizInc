@@ -86,6 +86,14 @@ namespace ProjWizInc.Core.Definitions {
         public int GetID<T>(string key) where T:DefinitionBase{
             return _typeKeyIdMap[typeof (T)][key];
         }
+        public int GetDefCount<T>() where T : DefinitionBase {
+            if (!_typeIdDefMap.ContainsKey(typeof(T))) {
+                throw new InvalidOperationException(
+                    $"[DefinitionManager] Type {typeof(T).Name} has not been registered yet. " +
+                    "Make sure definitions are loaded before calling this.");
+            }
+            return _typeIdDefMap[typeof(T)].Length;
+        }
         private string GetConfigPath(string fileName) {
             //for when we are done done then we place this next to the .exe
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;

@@ -1,17 +1,13 @@
 ﻿using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using ProjWizInc.Core.Managers;
 using System.Resources;
-using System.Text;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Features {
     internal class ResourcePayoutEntry : EntryInterface {
-        public string ResourceKey {  get; internal set; }
-        public BigNum Ammount { get; internal set; }
+        public string ResourceKey {  get; set; }
+        public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
         [JsonIgnore]
         public int ResourceID { get; internal set; }
@@ -22,12 +18,11 @@ namespace ProjWizInc.Core.Definitions.Features {
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
                 entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
-                entry.Ammount = manager.GetDefinition<ResourceDefinition>(entry.ResourceID).GetFeature<>
             }   
         }
-        public void Payout(ResourceManager manager) {
+        public void Payout(EconomyManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
-
+                manager.AddResource(entry.ResourceID,entry.Amount);
             }
         }
     }

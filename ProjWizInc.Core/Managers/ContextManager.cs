@@ -9,7 +9,7 @@ namespace ProjWizInc.Core.Managers {
     public class ContextManager {
         private readonly EventBroker _event;
         private readonly TimeManager _time;
-        private readonly ResourceManager _resources;
+        private readonly EconomyManager _resources;
         private readonly JobManager _jobs;
         private readonly GameLoopManager _gameLoop;
         private readonly DefinitionManager _defs;
@@ -19,7 +19,8 @@ namespace ProjWizInc.Core.Managers {
             _defs.Init();
             _event = new EventBroker();
             _time = new TimeManager(_event);
-            _resources = new ResourceManager(_event);
+            _resources = new EconomyManager(_event,_defs);
+            _resources.Init();
             _jobs = new JobManager(_event, _defs);
             _gameLoop = new GameLoopManager(_event);
         }

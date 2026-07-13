@@ -581,6 +581,7 @@ namespace ProjWizInc.Core.Managers {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ResourceManager.cs
 ==============================================================================
+using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
@@ -595,7 +596,7 @@ namespace ProjWizInc.Core.Managers {
     public class ResourceState {
         //changed the dictionary to using ints instead of strings for faster searching
         //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
-        public Dictionary<int, long> Resources { get; } = new() {
+        public Dictionary<int, BigNum> Resources { get; } = new() {
         };
     }
     public class ResourceManager{
@@ -610,7 +611,7 @@ namespace ProjWizInc.Core.Managers {
         public ResourceState State => _state;
         public void Init() {
             //read json later, for now we have hard coded thing
-            Dictionary<string, long> ResourceDefs = new() {
+            Dictionary<string, BigNum> ResourceDefs = new() {
                 {"stone",0 },
                 {"wood",0 },
                 {"gold",0 }
@@ -626,7 +627,7 @@ namespace ProjWizInc.Core.Managers {
         public void Update(UpdateLogicEvent e) {
             
         }
-        public void AddResource(int resourceID, long amount) {
+        public void AddResource(int resourceID, BigNum amount) {
             lock (_lock) {
                 if (!_state.Resources.ContainsKey(resourceID)) {
                     _state.Resources[resourceID] = 0;
@@ -634,7 +635,7 @@ namespace ProjWizInc.Core.Managers {
                 _state.Resources[resourceID] += amount;
             }            
         }
-        public long GetResource(int resourceID) {
+        public BigNum GetResource(int resourceID) {
             lock (_lock) {
                 if (!_state.Resources.ContainsKey(resourceID)) {
                     _state.Resources[resourceID] = 0;
@@ -664,6 +665,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class TimeState {
+        //we will use minutes/hours/days to store time, probably its own ADT
         public long TimeElapsed;
         public int TicksElapsed;
     }

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class TimeState {
+        //we will use minutes/hours/days to store time, probably its own ADT
         public long TimeElapsed;
         public int TicksElapsed;
     }

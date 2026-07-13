@@ -12,8 +12,10 @@ namespace ProjWizInc.Core.Managers {
         private readonly ResourceManager _resources;
         private readonly JobManager _jobs;
         private readonly GameLoopManager _gameLoop;
+        private readonly DefinitionManager _defs;
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
+            _defs = new DefinitionManager();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);

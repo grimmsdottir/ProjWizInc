@@ -1,4 +1,5 @@
-﻿using ProjWizInc.Core.Data;
+﻿using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
@@ -12,7 +13,7 @@ namespace ProjWizInc.Core.Managers {
     public class ResourceState {
         //changed the dictionary to using ints instead of strings for faster searching
         //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
-        public Dictionary<int, long> Resources { get; } = new() {
+        public Dictionary<int, BigNum> Resources { get; } = new() {
         };
     }
     public class ResourceManager{
@@ -25,25 +26,13 @@ namespace ProjWizInc.Core.Managers {
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public ResourceState State => _state;
-        public void Init() {
-            //read json later, for now we have hard coded thing
-            Dictionary<string, long> ResourceDefs = new() {
-                {"stone",0 },
-                {"wood",0 },
-                {"gold",0 }
-            };
-            int i = 0;
-            foreach (var r in ResourceDefs) {
-                _state.Resources.Add(i, r.Value);
-                i++;
-            }
-        }
+        public void Init() {}
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {
             
         }
-        public void AddResource(int resourceID, long amount) {
+        public void AddResource(int resourceID, BigNum amount) {
             lock (_lock) {
                 if (!_state.Resources.ContainsKey(resourceID)) {
                     _state.Resources[resourceID] = 0;
@@ -51,7 +40,7 @@ namespace ProjWizInc.Core.Managers {
                 _state.Resources[resourceID] += amount;
             }            
         }
-        public long GetResource(int resourceID) {
+        public BigNum GetResource(int resourceID) {
             lock (_lock) {
                 if (!_state.Resources.ContainsKey(resourceID)) {
                     _state.Resources[resourceID] = 0;

@@ -11,6 +11,7 @@ namespace ProjWizInc.Core.ADT {
         private readonly double _man;
         private readonly long _exp;
         private readonly bool _isLarge;
+        private readonly bool _isNegative;
 
         private const long THRESHOLD = 1_000_000_000_000_000L; // 1e15
         private const int THRESH_POW = 15;
@@ -21,17 +22,19 @@ namespace ProjWizInc.Core.ADT {
             _small = value;
             _man = 0;
             _exp = 0;
+            _isNegative = value >= 0;
         }
         public BigNum(int value) : this((long)value) { }
         public BigNum(double man, long exp) {
-            if (Math.Abs(man) < EPSILON) {
+            if (Math.Abs(man) < EPSILON || man == 0) {
                 this = new BigNum(0);
                 return;
             }
+            _isNegative = man >= 0;
             int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
             double normMan = man / Math.Pow(10, shift);
             long normExp = exp + shift;
-            if (normMan > 0 && normExp < THRESH_POW) {
+            if (normMan >= 0 && normExp < THRESH_POW) {
                 _isLarge = false;
                 _small = (long)(normMan * Math.Pow(10,normExp));
                 _man = 0;
@@ -43,8 +46,8 @@ namespace ProjWizInc.Core.ADT {
                 _exp = normExp;
             }
         }
-
         public static BigNum operator +(BigNum a, BigNum b) {
+            if (a._isNegative != b._isNegative) { return a - b; }
             //small + small
             if (!a._isLarge && !b._isLarge) {
                 long sum = a._small + b._small;
@@ -53,30 +56,13 @@ namespace ProjWizInc.Core.ADT {
                     return new BigNum(sum);
                 } else {
                     //= big now
-                    return new BigNum(0);
+                    return new BigNum((double)sum,0);
                 }
             }
             //if either numbers are big, we have to do the slower operation
             //if a is small, we just use the small, otherwise we take their man and exp
-            double man1;
-            long exp1;
-            if (a._isLarge) {
-                man1 = a._man;
-                exp1 = a._exp;
-            } else {
-                man1 = a._small;
-                exp1 = 0;
-            }
-            //same with b
-            double man2;
-            long exp2;
-            if (b._isLarge) {
-                man2 = b._man;
-                exp2 = b._exp;
-            } else {
-                man2 = b._small;
-                exp2 = 0;
-            }
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
             //ensure that a is smaller than b
             if (exp1 < exp2) {
                 double manTmp = man1;
@@ -87,33 +73,48 @@ namespace ProjWizInc.Core.ADT {
                 exp2 = expTmp;
             }
             long diff = exp1 - exp2;
-            if (diff < THRESHOLD) { 
+            if (diff > THRESH_POW) { 
                 return new BigNum(man1,exp1);
             } else {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
+        public static BigNum operator -(BigNum a, BigNum b) {
+            if (a._isNegative != b._isNegative) { return a + b; }
+
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
+            long diff = exp1 - exp2;
+            if (diff > THRESH_POW) { return a; }
+            return new BigNum(man1 - (man2 / Math.Pow(10, diff)), exp1);
+        }
         public static BigNum operator *(BigNum a, BigNum b) {
-            double man1;
-            long exp1;
-            if (a._isLarge) {
-                man1 = a._man;
-                exp1 = a._exp;
-            } else {
-                man1 = a._small;
-                exp1 = 0;
-            }
-            //same with b
-            double man2;
-            long exp2;
-            if (b._isLarge) {
-                man2 = b._man;
-                exp2 = b._exp;
-            } else {
-                man2 = b._small;
-                exp2 = 0;
-            }
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
             return new BigNum(man1 * man2, exp1 + exp2);
+        }
+        private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
+        //comparator section
+        public static bool operator >(BigNum a, BigNum b) {
+            if (a._exp != b._exp) return a._exp > b._exp;
+            return a._man > b._man;
+        }
+        public static bool operator <(BigNum a, BigNum b) => b > a;
+        public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
+        public static bool operator <=(BigNum a, BigNum b) => b >= a;
+        public static BigNum Parse(string s) {
+            if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
+
+            if (s.Contains('e') || s.Contains('E')) {
+                string[] parts = s.Split('e', 'E');
+                return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
+            }
+
+            return new BigNum(long.Parse(s));
+        }
+        public override string ToString() {
+            if (!_isLarge) return _small.ToString("N0");
+            return $"{_man:F2}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
         public static implicit operator BigNum(long v) => new BigNum(v);

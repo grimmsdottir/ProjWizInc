@@ -408,12 +408,25 @@ namespace ProjWizInc.Core.Definitions {
                 }
             }
         }
+        //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
             if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
                 var typedArray = (T[])array;
                 return typedArray[id];
             }
             return null;
+        }
+        //primarily used by defs for linking
+        public int GetID<T>(string key) where T:DefinitionBase{
+            return _typeKeyIdMap[typeof (T)][key];
+        }
+        public int GetDefCount<T>() where T : DefinitionBase {
+            if (!_typeIdDefMap.ContainsKey(typeof(T))) {
+                throw new InvalidOperationException(
+                    $"[DefinitionManager] Type {typeof(T).Name} has not been registered yet. " +
+                    "Make sure definitions are loaded before calling this.");
+            }
+            return _typeIdDefMap[typeof(T)].Length;
         }
         private string GetConfigPath(string fileName) {
             //for when we are done done then we place this next to the .exe
@@ -573,28 +586,29 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Feature
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using ProjWizInc.Core.Managers;
 using System.Resources;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
     internal class ResourcePayoutEntry : EntryInterface {
+        public string ResourceKey {  get; set; }
+        public BigNum Amount { get; set; }
+        //we ignore resourceIDs because it is generated on bootup and not important
+        [JsonIgnore]
         public int ResourceID { get; internal set; }
-        public BigNum Ammount { get; internal set; }
+        
     }
     internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
-            foreach (var entry in PayoutEntries) {
-                entry.ResourceID = manager.;
-            }
-        }
-        public void Payout(ResourceManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
-
+                entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
+            }   
+        }
+        public void Payout(EconomyManager manager) {
+            foreach (ResourcePayoutEntry entry in PayoutEntries) {
+                manager.AddResource(entry.ResourceID,entry.Amount);
             }
         }
     }
@@ -657,7 +671,7 @@ namespace ProjWizInc.Core.Managers {
     public class ContextManager {
         private readonly EventBroker _event;
         private readonly TimeManager _time;
-        private readonly ResourceManager _resources;
+        private readonly EconomyManager _resources;
         private readonly JobManager _jobs;
         private readonly GameLoopManager _gameLoop;
         private readonly DefinitionManager _defs;
@@ -667,7 +681,8 @@ namespace ProjWizInc.Core.Managers {
             _defs.Init();
             _event = new EventBroker();
             _time = new TimeManager(_event);
-            _resources = new ResourceManager(_event);
+            _resources = new EconomyManager(_event,_defs);
+            _resources.Init();
             _jobs = new JobManager(_event, _defs);
             _gameLoop = new GameLoopManager(_event);
         }
@@ -686,6 +701,75 @@ namespace ProjWizInc.Core.Managers {
         public TimeState GetTimeState() {
             return _time.State;
         }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EconomyManager.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Resources;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+
+    
+    internal class EconomyManager{
+        public class EconomyState {
+
+            //changed the dictionary to using ints instead of strings for faster searching
+            public BigNum[]? Resources { get; internal set; }
+        }
+
+        private readonly EventBroker _events;
+        private readonly EconomyState _state = new();
+        private readonly DefinitionManager _defs;
+        private readonly object _lock = new ();
+        public EconomyManager(EventBroker events, DefinitionManager defs) {
+            _events = events; 
+            _defs= defs;
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public EconomyState State => _state;
+        public void Init() {
+            _state.Resources = new BigNum[_defs.GetDefCount<ResourceDefinition>()];
+        }
+        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
+        //but if we change UpdateFrameEvent with parameters later, we can check it with e
+        public void Update(UpdateLogicEvent e) {
+            
+        }
+        public void AddResource(int resourceID, BigNum amount) {
+            lock (_lock) {
+                if (resourceID >= _state.Resources.Length) {
+                    throw new IndexOutOfRangeException("Attempted to access resource at index "+ resourceID+". There are" +
+                        "only "+_state.Resources.Length + " resource types");
+                }
+                _state.Resources[resourceID] += amount;
+            }            
+        }
+        public BigNum GetResource(int resourceID) {
+            lock (_lock) {
+                if (resourceID >= _state.Resources.Length) {
+                    throw new IndexOutOfRangeException("Attempted to access resource at index " + resourceID + ". There are" +
+                        "only " + _state.Resources.Length + " resource types");
+                }
+                return _state.Resources[resourceID];
+            }
+           
+
+        }
+
     }
 }
 
@@ -952,68 +1036,6 @@ namespace ProjWizInc.Core.Managers {
 
             }
         }
-    }
-}
-
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ResourceManager.cs
-==============================================================================
-using ProjWizInc.Core.ADT;
-using ProjWizInc.Core.Data;
-using ProjWizInc.Core.Events;
-using ProjWizInc.Core.States;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Managers {
-
-    public class ResourceState {
-        private static readonly Dictionary<int, BigNum> dictionary = [];
-
-        //changed the dictionary to using ints instead of strings for faster searching
-        //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
-        public Dictionary<int, BigNum> Resources { get; } = dictionary;
-    }
-    public class ResourceManager{
-        
-        private readonly EventBroker _events;
-        private readonly ResourceState _state = new();
-        private readonly object _lock = new ();
-        public ResourceManager(EventBroker events) {
-            _events = events; 
-            _events.Subscribe<UpdateLogicEvent>(Update);
-        }
-        public ResourceState State => _state;
-        public void Init() {}
-        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
-        //but if we change UpdateFrameEvent with parameters later, we can check it with e
-        public void Update(UpdateLogicEvent e) {
-            
-        }
-        public void AddResource(int resourceID, BigNum amount) {
-            lock (_lock) {
-                if (!_state.Resources.ContainsKey(resourceID)) {
-                    _state.Resources[resourceID] = 0;
-                }
-                _state.Resources[resourceID] += amount;
-            }            
-        }
-        public BigNum GetResource(int resourceID) {
-            lock (_lock) {
-                if (!_state.Resources.ContainsKey(resourceID)) {
-                    _state.Resources[resourceID] = 0;
-                }
-                return _state.Resources[resourceID];
-            }
-           
-
-        }
-
     }
 }
 

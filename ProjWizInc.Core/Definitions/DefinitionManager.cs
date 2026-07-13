@@ -13,18 +13,18 @@ using static ProjWizInc.Core.Definitions.GameDefinitions;
 namespace ProjWizInc.Core.Definitions {
     
     internal class GameDefinitions {
-        
+        //our single source of truth for definitions, if we add any new definitions, it has to come here
         public List<ResourceDefinition> Resources { get; internal set; } = [];
         public List<JobDefinition> Jobs { get; internal set; } = [];
     }
     internal class DefinitionManager {
         //now we use Type for keys. this first dictionary is a dictionary of dictionaries
         //each type has its own dictionary, which maps strings to int
-        private readonly Dictionary<Type, Dictionary<string, int>> _registry = [];
+        private readonly Dictionary<Type, Dictionary<string, int>> _typeKeyIdMap = [];
         //for each Type, it will have its own array, we use a generic Array, because we dont know the typing yet,
         //but it should basically be like <Type,Type[]>
         //the int ids from the first dictionary map to the position in the defStore, for high performance
-        private readonly Dictionary<Type, Array> _defStore = [];
+        private readonly Dictionary<Type, Array> _typeIdDefMap = [];
 
 
         private const string RESOURCES_PATH = "resourceDefs.json";
@@ -37,13 +37,44 @@ namespace ProjWizInc.Core.Definitions {
             string jsonString = File.ReadAllText(RESOURCES_PATH);
             //convert jsonString into a giant GameDefinitions object
             var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
+            if (data == null) {
+                //throw some big ass exception
+                return;
+            }
+            //same as the GameDefinitions, we gotta do this one manually
+            RegisterDefinition(data.Resources);
+            RegisterDefinition(data.Jobs);
+            //we only deal with the links once everything is done, cant do plumbing of an in construction house they say
+            ResolveAllLinks();
 
-            
         }
-        private void ResolveJobFeatures(JobDefinition job) {
-            //foreach ()
+        //this function accepts a list of whatever, in this case resources and jobs for now
+        private void RegisterDefinition<T>(List<T> list) where T : DefinitionBase {
+            //string to int map for the type
+            var keyIdMap = new Dictionary<string, int>();
+            //array that holds all the defs
+            var idDefMap = new T[list.Count];
+            for (int i = 0; i < list.Count; i++) {
+                var def = list[i];
+                def.Id = i;
+                keyIdMap[def.Key] = i;
+                idDefMap[i] = def;
+            }
+            _typeKeyIdMap[typeof(T)] = keyIdMap;
+            _typeIdDefMap[typeof(T)] = idDefMap;
         }
-        public int GetIdFromKey(string key) {
+        private void ResolveAllLinks() {
+            foreach (var idDefMap in _typeIdDefMap.Values) {
+                foreach (var def in idDefMap) {
+                    if (def is DefinitionBase entity) {
+                        foreach(var feature in entity.Features.OfType<LinkableDefinitionInterface>()) {
+                            feature.ResolveLinks(this);
+                        }
+                    }
+                }
+            }
+        }
+        public T GetDefFromKey(string key) {
             return -1;
         }
         private string GetConfigPath(string fileName) {

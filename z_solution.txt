@@ -247,6 +247,10 @@ namespace ProjWizInc.Core.ADT {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
+        public static BigNum operator ++(BigNum a) {
+            if (a._isLarge) {  return a; }
+            return a + 1;
+        }
         public static BigNum operator -(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a + b; }
 
@@ -255,6 +259,10 @@ namespace ProjWizInc.Core.ADT {
             long diff = exp1 - exp2;
             if (diff > THRESH_POW) { return a; }
             return new BigNum(man1 - (man2 / Math.Pow(10, diff)), exp1);
+        }
+        public static BigNum operator --(BigNum a) {
+            if (a._isLarge) { return a; }
+            return a - 1;
         }
         public static BigNum operator *(BigNum a, BigNum b) {
             var (man1, exp1) = a.GetParts();
@@ -400,8 +408,12 @@ namespace ProjWizInc.Core.Definitions {
                 }
             }
         }
-        public T GetDefFromKey(string key) {
-            return -1;
+        public T GetDefinition<T>(int id) where T:DefinitionBase {
+            if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
+                var typedArray = (T[])array;
+                return typedArray[id];
+            }
+            return null;
         }
         private string GetConfigPath(string fileName) {
             //for when we are done done then we place this next to the .exe
@@ -564,19 +576,25 @@ using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Resources;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Features {
     internal class ResourcePayoutEntry : EntryInterface {
-        public string ResourceID { get; internal set; }
+        public int ResourceID { get; internal set; }
         public BigNum Ammount { get; internal set; }
     }
     internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (var entry in PayoutEntries) {
-                //entry.ResourceID = manager;
+                entry.ResourceID = manager.;
+            }
+        }
+        public void Payout(ResourceManager manager) {
+            foreach (ResourcePayoutEntry entry in PayoutEntries) {
+
             }
         }
     }
@@ -598,7 +616,7 @@ using System.Threading.Tasks;
 namespace ProjWizInc.Core.Definitions.Features {
     
     public class RequiresTicksFeature : FeatureInterface {
-        public long RequiredTicks { get; set; } = 1000;
+        public BigNum RequiredTicks { get; set; } = 1000;
     }
 }
 
@@ -853,7 +871,9 @@ namespace ProjWizInc.Core.Managers {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
 ==============================================================================
+using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Features;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
@@ -864,43 +884,73 @@ using System.Threading.Tasks;
 using static System.Reflection.Metadata.BlobBuilder;
 
 namespace ProjWizInc.Core.Managers {
+    internal class JobState {
+        public int ActiveJobID { get; internal set; } = -1;
+        //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
+        public JobDefinition? ActiveJobDef { get; internal set; } = null;
+        //we also keep a cache of any components and their state vars like ticks and xp
+        public RequiresTicksFeature? JobTicksRequired { get; internal set; } = null;
+        public BigNum Ticks { get; internal set; } = 0;
+        public PayoutFeature? JobPayout { get; internal set; } = null;
+        //a handy reset function for nulling everything
+        public void Reset() {
+            ActiveJobID = -1;
+            ActiveJobDef = null;
+            JobTicksRequired = null;
+            Ticks = 0;
+            JobPayout = null;
+        }
+    }
     internal class JobManager {
+        //our few state fields. it should be ok to leave them here, because 
+        
         private readonly EventBroker _events;
         private readonly DefinitionManager _defs;
-        private readonly List<JobState> _state = [];
-        public JobDefinition? ActiveJob { get; private set; }
+        private readonly JobState _state;
+        //we use -1 like null basically, if its -1 that means that nothings active
+        
         public JobManager(EventBroker events, DefinitionManager defs) {
             _events = events;
             _defs = defs;
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
-        public void ToggleTask(string id) {
-            //need to refactor this to use the new definition manager later
-            /*
-            if (ActiveJob?.Id == id) {
-                ActiveJob = null;
+        public void ToggleJob(int jobId) {
+            //basically if we click the current job, it just stops it, but if we click something else, we 
+            //move to that one instead
+            if (_state.ActiveJobID == jobId) {
+                _state.Reset();
             } else {
-                ActiveJob = _state.Find(j => j.Id == id);
-                if (ActiveJob == null) { 
-                    //log this as an error
-                }
+                CacheState(jobId);
+            }            
+        }
+        private void CacheState(int jobId) {
+            _state.Reset();
+            if (jobId < 0) {
+                //todo: log and complain about illegal arguement
+                return;
+            } else {
+                _state.ActiveJobID = jobId;
+                _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
+                _state.JobTicksRequired = _state.ActiveJobDef.GetFeature< RequiresTicksFeature>();
+                _state.Ticks = 0;
+                _state.JobPayout = _state.ActiveJobDef.GetFeature<PayoutFeature>();
             }
-            */
         }
         public void Update(UpdateLogicEvent e) {
-            if (ActiveJob == null) { return; }
-            //we will need to check what features the job has and resolve them
-            /*
-            ActiveJob.Progress++;
-            if (ActiveJob.Progress >= ActiveJob.TicksRequired) { 
-                ActiveJob.Progress -= ActiveJob.TicksRequired;
-                CompleteJob();
+            if (_state.ActiveJobID == -1) { return; }
+            if (_state.JobTicksRequired != null) {
+                _state.Ticks++;
+                if (_state.Ticks >= _state.JobTicksRequired.RequiredTicks) {
+                    _state.Ticks -= _state.JobTicksRequired.RequiredTicks;
+                    CompleteJob();
+                }
             }
-            */
         }
         private void CompleteJob() {
-            //int id = 
-            //_events.Publish(ResourceGainedEvent());
+            if (_state.JobPayout == null) { return; }
+            foreach(ResourcePayoutEntry payour in _state.JobPayout.PayoutEntries) {
+
+            }
         }
     }
 }

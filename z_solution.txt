@@ -521,9 +521,9 @@ namespace ProjWizInc.Core.Definitions.Common {
         public string DisplayName { get; internal set; } = string.Empty;
         public int Id { get; internal set; } = -1;
         //holds our features
-        public List<FeatureInterface> Features { get; internal set; } = [];
+        public List<IFeatureInterface> Features { get; internal set; } = [];
         // Helper method to quickly find a specific component
-        public T GetFeature<T>() where T : FeatureInterface {
+        public T GetFeature<T>() where T : IFeatureInterface {
             return Features.OfType<T>().FirstOrDefault();
         }
     }
@@ -541,7 +541,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    public interface EntryInterface {
+    public interface IEntryInterface {
     }
 }
 
@@ -550,14 +550,21 @@ namespace ProjWizInc.Core.Definitions.Common {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\FeatureInterface.cs
 ==============================================================================
+using ProjWizInc.Core.Definitions.Features;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    public interface FeatureInterface {
+    // This tells the Serializer: "When you see an IFeatureInterface, look for the $type field"
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    // This maps the string "payout" in JSON to the actual C# class PayoutFeature
+    [JsonDerivedType(typeof(PayoutFeature), "payout")]
+    [JsonDerivedType(typeof(RequiresTicksFeature), "ticks")]
+    public interface IFeatureInterface {
         //we can add some fields here later like name or description for tooltips or flavor
     }
 }
@@ -586,12 +593,13 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Feature
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
 using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
-    internal class ResourcePayoutEntry : EntryInterface {
+    internal class ResourcePayoutEntry : IEntryInterface {
         public string ResourceKey {  get; set; }
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
@@ -599,16 +607,17 @@ namespace ProjWizInc.Core.Definitions.Features {
         public int ResourceID { get; internal set; }
         
     }
-    internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
+    internal class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
                 entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
             }   
         }
-        public void Payout(EconomyManager manager) {
+        public void Payout(EventBroker broker) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
-                manager.AddResource(entry.ResourceID,entry.Amount);
+                //manager.AddResource(entry.ResourceID,entry.Amount);
+                broker.Publish<ResourceGainedEvent>(entry.ResourceID,entry.Amount);
             }
         }
     }
@@ -629,7 +638,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Features {
     
-    public class RequiresTicksFeature : FeatureInterface {
+    public class RequiresTicksFeature : IFeatureInterface {
         public BigNum RequiredTicks { get; set; } = 1000;
     }
 }
@@ -652,7 +661,7 @@ namespace ProjWizInc.Core.Events {
     public readonly record struct AppStartedEvent(string Message);
     public readonly record struct GameStartedEvent();
     public readonly record struct TimeAdvancedEvent(long CurrentTime);
-    public readonly record struct ResourceGainedEvent(int id, BigNum ammount);
+    public readonly record struct ResourceGainedEvent(int Id, BigNum Amount);
 }
 
 
@@ -1031,9 +1040,8 @@ namespace ProjWizInc.Core.Managers {
             }
         }
         private void CompleteJob() {
-            if (_state.JobPayout == null) { return; }
-            foreach(ResourcePayoutEntry payour in _state.JobPayout.PayoutEntries) {
-
+            if (_state.JobPayout != null) {
+                
             }
         }
     }

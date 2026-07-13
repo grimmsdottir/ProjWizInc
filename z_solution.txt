@@ -194,7 +194,7 @@ namespace ProjWizInc.Core.ADT {
         }
         public BigNum(int value) : this((long)value) { }
         public BigNum(double man, long exp) {
-            if (Math.Abs(man) < EPSILON) {
+            if (Math.Abs(man) < EPSILON || man == 0) {
                 this = new BigNum(0);
                 return;
             }
@@ -709,14 +709,7 @@ namespace ProjWizInc.Core.Managers {
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public ResourceState State => _state;
-        public void Init() {
-            //read json later, for now we have hard coded thing
-            Dictionary<string, BigNum> ResourceDefs = new() {
-                {"stone",0 },
-                {"wood",0 },
-                {"gold",0 }
-            };
-        }
+        public void Init() {}
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {

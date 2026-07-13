@@ -322,17 +322,93 @@ namespace ProjWizInc.Core.Data {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Definitions.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\DefinitionManager.cs
 ==============================================================================
+using Microsoft.Win32;
 using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
+using static ProjWizInc.Core.Definitions.GameDefinitions;
 
 namespace ProjWizInc.Core.Definitions {
     
+    internal class GameDefinitions {
+        
+        public List<ResourceDefinition> Resources { get; internal set; } = [];
+        public List<JobDefinition> Jobs { get; internal set; } = [];
+    }
+    internal class DefinitionManager {
+        //The registry, which contains the defs with int keys(an array)
+        //they are readonly, because they are generated during booting up, and should never need to be changed
+        //unless we want to make funky custom build-a-job things
+        private ResourceDefinition[] _resourceDefs;
+        private JobDefinition[] _jobDefs;
+        //translation lookups, only used once during booting, should clear/null them after we done
+        private readonly Dictionary<string, int> _resourceKeys = [];
+        private readonly Dictionary<string, int> _jobKeys = [];
+
+
+        private const string RESOURCES_PATH = "resourceDefs.json";
+        public List<ResourceDefinition> Registry { get; private set; }
+        public DefinitionManager() { 
+            Registry = [];
+        }
+        public void Init() {
+            //read json as string
+            string jsonString = File.ReadAllText(RESOURCES_PATH);
+            //convert jsonString into a giant GameDefinitions object
+            var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
+            //first we map our resources
+            //for each resource, we map the string key (wood) to a ResourceDef object and an integer
+            //we use the integer for accessing the definition because string keys are way slower than int keys
+            _resourceDefs = new ResourceDefinition[data.Resources.Count];
+            for (int i = 0; i < data.Resources.Count; i++) { 
+                var def = data.Resources[i];
+                def.Id = i;
+                _resourceDefs[i] = def;
+                _resourceKeys[def.Key] = i;
+            }
+            //now we map our jobs, which will be a bit more complex, due to components/features
+            _jobDefs = new JobDefinition[data.Jobs.Count];
+            for (int i = 0;i < data.Jobs.Count; i++) {
+                var job = data.Jobs[i];
+                job.Id = i;
+                ResolveJobFeatures(job);
+                _jobDefs[i] = job;
+                _jobKeys[job.Key] = i;
+            }
+        }
+        private void ResolveJobFeatures(JobDefinition job) {
+            foreach ()
+        }
+        public int GetIdFromKey(string key,) {
+
+        }
+        private string GetConfigPath(string fileName) {
+            //for when we are done done then we place this next to the .exe
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            return Path.Combine(baseDir, "Data", fileName);
+        }
+        public void GenerateTemplate() {
+            string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string dataPath = Path.Combine(projectRoot, "Data", "defs.json");
+            //string path = GetConfigPath(RESOURCES_PATH);
+            if (!File.Exists(dataPath)) {
+                Directory.CreateDirectory(Path.GetDirectoryName(dataPath));
+            }
+            var template = new GameDefinitions();
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(template, options);
+            File.WriteAllText(dataPath, json);
+        }
+    }
 }
 
 
@@ -350,18 +426,14 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
     //this entry can 
-    public class ResourcePayoutEntry : EntryInterface {
-        public string ResourceID { get; set; }
-        public BigNum Ammount { get; set; }
-    }
+    
 }
 
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\JobDefinition.cs
 ==============================================================================
-using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
@@ -370,11 +442,32 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
-    public class PayoutFeature : FeatureInterface {
-        public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
+    internal class JobDefinition : DefinitionBase {
+        //holds our features
+        public List<FeatureInterface> Features { get; set; } = [];
+        // Helper method to quickly find a specific component
+        public T GetFeature<T>() where T : FeatureInterface {
+            return Features.OfType<T>().FirstOrDefault();
+        }
     }
-    public class RequiresTicksFeature : FeatureInterface {
-        public long RequiredTicks { get; set; } = 1000;
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\ResourceDefinition.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions {
+    internal class ResourceDefinition : DefinitionBase {
+        public ResourceDefinition() {
+        }
     }
 }
 
@@ -390,7 +483,11 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    
+    internal class DefinitionBase {
+        public string Key { get; internal set; } = string.Empty;
+        public string DisplayName { get; internal set; } = string.Empty;
+        public int Id { get; internal set; } = -1;
+    }
 }
 
 
@@ -429,6 +526,71 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\LinkableDefinitionInterface.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    internal interface LinkableDefinitionInterface {
+        void ResolveLinks(DefinitionManager manager);
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features\PayoutFeature.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Features {
+    internal class ResourcePayoutEntry : EntryInterface {
+        public string ResourceID { get; internal set; }
+        public BigNum Ammount { get; internal set; }
+    }
+    internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
+        public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
+        public void ResolveLinks(DefinitionManager manager) {
+            foreach (var entry in PayoutEntries) {
+                entry.ResourceID = manager
+            }
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features\RequiresTicksFeature.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Features {
+    
+    public class RequiresTicksFeature : FeatureInterface {
+        public long RequiredTicks { get; set; } = 1000;
+    }
+}
+
+
+
+==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
@@ -452,7 +614,7 @@ namespace ProjWizInc.Core.Events {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs
 ==============================================================================
-using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -470,7 +632,7 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _defs = new DefinitionManager();
-            _defs.ReadFiles();
+            _defs.Init();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);
@@ -491,104 +653,6 @@ namespace ProjWizInc.Core.Managers {
         }
         public TimeState GetTimeState() {
             return _time.State;
-        }
-    }
-}
-
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\DefinitionManager.cs
-==============================================================================
-using Microsoft.Win32;
-using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Common;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using static ProjWizInc.Core.Managers.GameDefinitions;
-
-namespace ProjWizInc.Core.Managers {
-    
-    public class GameDefinitions {
-        
-        public List<ResourceDefinition> Resources { get; private set; } = [];
-        public List<JobDefinition> Jobs { get; private set; } = [];
-    }
-    public class DefinitionBase {
-        public string Key { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public int Id { get; protected set; } = -1;
-    }
-    public class ResourceDefinition : DefinitionBase {
-        public ResourceDefinition() {
-        }
-    }
-    public class JobDefinition : DefinitionBase {
-        //holds our components
-        public List<FeatureInterface> Features { get; set; } = [];
-        // Helper method to quickly find a specific component
-        public T GetComponent<T>() where T : FeatureInterface {
-            return Features.OfType<T>().FirstOrDefault();
-        }
-    }
-    public class DefinitionManager {
-        //The registry, which contains the defs with int keys(an array)
-        //they are readonly, because they are generated during booting up, and should never need to be changed
-        //unless we want to make funky custom build-a-job things
-        private readonly ResourceDefinition[] _resourceDefs;
-        private readonly JobDefinition[] _jobDefs;
-        //translation lookups, only used once during booting, should clear/null them after we done
-        private readonly Dictionary<string, int> _resourceKeys = [];
-        private readonly Dictionary<string, int> _jobKeys = [];
-
-
-        private const string RESOURCES_PATH = "resourceDefs.json";
-        public List<ResourceDefinition> Registry { get; private set; }
-        public DefinitionManager() { 
-            Registry = [];
-        }
-        public void Init() {
-            //read json as string
-            string jsonString = File.ReadAllText(RESOURCES_PATH);
-            //convert jsonString into a giant GameDefinitions object
-            var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
-            //first we map our resources
-            //for each resource, we map the string key (wood) to a ResourceDef object and an integer
-            //we use the integer for accessing the definition because string keys are way slower than int keys
-            for (int i = 0; i < data.Resources.Count; i++) { 
-                var def = data.Resources[i];
-                def.Id = i;
-            }
-            //now we map our jobs, which will be a bit more complex, due to components/features
-            for (int i = 0;i < data.Jobs.Count; i++) {
-
-            }
-        }
-        public int GetId(string key) => _keyToId[key];
-        public ResourceDefinition GetDef(int id) => _idToDef[id];
-        private string GetConfigPath(string fileName) {
-            //for when we are done done then we place this next to the .exe
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            return Path.Combine(baseDir, "Data", fileName);
-        }
-        public void GenerateTemplate() {
-            string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
-            string dataPath = Path.Combine(projectRoot, "Data", "defs.json");
-            //string path = GetConfigPath(RESOURCES_PATH);
-            if (!File.Exists(dataPath)) {
-                Directory.CreateDirectory(Path.GetDirectoryName(dataPath));
-            }
-            var template = new GameDefinitions();
-            template.Resources.Add(new ResourceDefinition("stone","Stone"));
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(template, options);
-            File.WriteAllText(dataPath, json);
         }
     }
 }
@@ -1174,7 +1238,7 @@ namespace ProjWizInc.WinForms
 FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
 ==============================================================================
 // See https://aka.ms/new-console-template for more information
-using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.Definitions;
 
 Console.WriteLine("Hello, World!");
 Console.WriteLine("Enter any key to exit...");

@@ -20,6 +20,8 @@ namespace ProjWizInc.Core.Managers {
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public void ToggleTask(string id) {
+            //need to refactor this to use the new definition manager later
+            /*
             if (ActiveJob?.Id == id) {
                 ActiveJob = null;
             } else {
@@ -28,15 +30,18 @@ namespace ProjWizInc.Core.Managers {
                     //log this as an error
                 }
             }
+            */
         }
         public void Update(UpdateLogicEvent e) {
             if (ActiveJob == null) { return; }
-            
+            //we will need to check what features the job has and resolve them
+            /*
             ActiveJob.Progress++;
             if (ActiveJob.Progress >= ActiveJob.TicksRequired) { 
                 ActiveJob.Progress -= ActiveJob.TicksRequired;
                 CompleteJob();
             }
+            */
         }
         private void CompleteJob() {
             //int id = 

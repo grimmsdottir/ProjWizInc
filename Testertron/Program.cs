@@ -3,6 +3,6 @@ using ProjWizInc.Core.Definitions;
 
 Console.WriteLine("Hello, World!");
 Console.WriteLine("Enter any key to exit...");
-DefinitionManager defs = new DefinitionManager();
-defs.GenerateTemplate();
+//DefinitionManager defs = new DefinitionManager();
+//defs.GenerateTemplate();
 Console.ReadLine();

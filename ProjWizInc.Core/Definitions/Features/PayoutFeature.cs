@@ -15,7 +15,7 @@ namespace ProjWizInc.Core.Definitions.Features {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (var entry in PayoutEntries) {
-                entry.ResourceID = manager
+                //entry.ResourceID = manager;
             }
         }
     }

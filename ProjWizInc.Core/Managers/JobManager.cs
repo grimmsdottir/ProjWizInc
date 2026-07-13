@@ -74,9 +74,8 @@ namespace ProjWizInc.Core.Managers {
             }
         }
         private void CompleteJob() {
-            if (_state.JobPayout == null) { return; }
-            foreach(ResourcePayoutEntry payour in _state.JobPayout.PayoutEntries) {
-
+            if (_state.JobPayout != null) {
+                
             }
         }
     }

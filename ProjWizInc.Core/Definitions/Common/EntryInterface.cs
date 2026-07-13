@@ -5,6 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    public interface EntryInterface {
+    public interface IEntryInterface {
     }
 }

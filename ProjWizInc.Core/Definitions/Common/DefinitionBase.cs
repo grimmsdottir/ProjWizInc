@@ -10,9 +10,9 @@ namespace ProjWizInc.Core.Definitions.Common {
         public string DisplayName { get; internal set; } = string.Empty;
         public int Id { get; internal set; } = -1;
         //holds our features
-        public List<FeatureInterface> Features { get; internal set; } = [];
+        public List<IFeatureInterface> Features { get; internal set; } = [];
         // Helper method to quickly find a specific component
-        public T GetFeature<T>() where T : FeatureInterface {
+        public T GetFeature<T>() where T : IFeatureInterface {
             return Features.OfType<T>().FirstOrDefault();
         }
     }

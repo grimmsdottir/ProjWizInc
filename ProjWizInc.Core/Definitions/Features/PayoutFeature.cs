@@ -1,11 +1,12 @@
 ﻿using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
 using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
-    internal class ResourcePayoutEntry : EntryInterface {
+    internal class ResourcePayoutEntry : IEntryInterface {
         public string ResourceKey {  get; set; }
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
@@ -13,16 +14,17 @@ namespace ProjWizInc.Core.Definitions.Features {
         public int ResourceID { get; internal set; }
         
     }
-    internal class PayoutFeature : FeatureInterface, LinkableDefinitionInterface {
+    internal class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
                 entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
             }   
         }
-        public void Payout(EconomyManager manager) {
+        public void Payout(EventBroker broker) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
-                manager.AddResource(entry.ResourceID,entry.Amount);
+                //manager.AddResource(entry.ResourceID,entry.Amount);
+                broker.Publish<ResourceGainedEvent>(entry.ResourceID,entry.Amount);
             }
         }
     }

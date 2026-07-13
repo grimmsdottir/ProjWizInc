@@ -179,6 +179,7 @@ namespace ProjWizInc.Core.ADT {
         private readonly double _man;
         private readonly long _exp;
         private readonly bool _isLarge;
+        private readonly bool _isNegative;
 
         private const long THRESHOLD = 1_000_000_000_000_000L; // 1e15
         private const int THRESH_POW = 15;
@@ -189,6 +190,7 @@ namespace ProjWizInc.Core.ADT {
             _small = value;
             _man = 0;
             _exp = 0;
+            _isNegative = value >= 0;
         }
         public BigNum(int value) : this((long)value) { }
         public BigNum(double man, long exp) {
@@ -196,6 +198,7 @@ namespace ProjWizInc.Core.ADT {
                 this = new BigNum(0);
                 return;
             }
+            _isNegative = man >= 0;
             int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
             double normMan = man / Math.Pow(10, shift);
             long normExp = exp + shift;
@@ -211,8 +214,8 @@ namespace ProjWizInc.Core.ADT {
                 _exp = normExp;
             }
         }
-
         public static BigNum operator +(BigNum a, BigNum b) {
+            if (a._isNegative != b._isNegative) { return a - b; }
             //small + small
             if (!a._isLarge && !b._isLarge) {
                 long sum = a._small + b._small;
@@ -243,6 +246,15 @@ namespace ProjWizInc.Core.ADT {
             } else {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
+        }
+        public static BigNum operator -(BigNum a, BigNum b) {
+            if (a._isNegative != b._isNegative) { return a + b; }
+
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
+            long diff = exp1 - exp2;
+            if (diff > THRESH_POW) { return a; }
+            return new BigNum(man1 - (man2 / Math.Pow(10, diff)), exp1);
         }
         public static BigNum operator *(BigNum a, BigNum b) {
             var (man1, exp1) = a.GetParts();

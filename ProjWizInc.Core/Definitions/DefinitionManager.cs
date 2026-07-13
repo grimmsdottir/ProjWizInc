@@ -74,8 +74,12 @@ namespace ProjWizInc.Core.Definitions {
                 }
             }
         }
-        public T GetDefFromKey(string key) {
-            return -1;
+        public T GetDefinition<T>(int id) where T:DefinitionBase {
+            if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
+                var typedArray = (T[])array;
+                return typedArray[id];
+            }
+            return null;
         }
         private string GetConfigPath(string fileName) {
             //for when we are done done then we place this next to the .exe

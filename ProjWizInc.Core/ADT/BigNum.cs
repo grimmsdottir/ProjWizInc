@@ -79,6 +79,10 @@ namespace ProjWizInc.Core.ADT {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
+        public static BigNum operator ++(BigNum a) {
+            if (a._isLarge) {  return a; }
+            return a + 1;
+        }
         public static BigNum operator -(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a + b; }
 
@@ -87,6 +91,10 @@ namespace ProjWizInc.Core.ADT {
             long diff = exp1 - exp2;
             if (diff > THRESH_POW) { return a; }
             return new BigNum(man1 - (man2 / Math.Pow(10, diff)), exp1);
+        }
+        public static BigNum operator --(BigNum a) {
+            if (a._isLarge) { return a; }
+            return a - 1;
         }
         public static BigNum operator *(BigNum a, BigNum b) {
             var (man1, exp1) = a.GetParts();

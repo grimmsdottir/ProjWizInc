@@ -9,6 +9,6 @@ using System.Threading.Tasks;
 namespace ProjWizInc.Core.Definitions.Features {
     
     public class RequiresTicksFeature : FeatureInterface {
-        public long RequiredTicks { get; set; } = 1000;
+        public BigNum RequiredTicks { get; set; } = 1000;
     }
 }

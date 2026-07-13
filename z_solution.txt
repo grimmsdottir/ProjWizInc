@@ -262,6 +262,24 @@ namespace ProjWizInc.Core.ADT {
             return new BigNum(man1 * man2, exp1 + exp2);
         }
         private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
+        //comparator section
+        public static bool operator >(BigNum a, BigNum b) {
+            if (a._exp != b._exp) return a._exp > b._exp;
+            return a._man > b._man;
+        }
+        public static bool operator <(BigNum a, BigNum b) => b > a;
+        public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
+        public static bool operator <=(BigNum a, BigNum b) => b >= a;
+        public static BigNum Parse(string s) {
+            if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
+
+            if (s.Contains('e') || s.Contains('E')) {
+                string[] parts = s.Split('e', 'E');
+                return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
+            }
+
+            return new BigNum(long.Parse(s));
+        }
         public override string ToString() {
             if (!_isLarge) return _small.ToString("N0");
             return $"{_man:F2}e{_exp}";
@@ -339,8 +357,10 @@ namespace ProjWizInc.Core.Managers {
         private readonly ResourceManager _resources;
         private readonly JobManager _jobs;
         private readonly GameLoopManager _gameLoop;
+        private readonly DefinitionManager _defs;
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
+            _defs = new DefinitionManager();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);
@@ -361,6 +381,74 @@ namespace ProjWizInc.Core.Managers {
         }
         public TimeState GetTimeState() {
             return _time.State;
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\DefinitionManager.cs
+==============================================================================
+using Microsoft.Win32;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    public class ResourceDefinition {
+        public string Key { get; private set; }
+        public string DisplayName { get; private set; }
+        public ResourceDefinition(string key, string displayName) { 
+            Key = key;
+            DisplayName = displayName;
+        }
+
+    }
+    public class GameDefinitions {
+        public List<ResourceDefinition> Resources { get; private set; } = [];
+    }
+    public class DefinitionManager {
+
+        private readonly Dictionary<string,int> _keyToId = [];
+        private readonly Dictionary<int, ResourceDefinition> _idToDef = [];
+        private const string RESOURCES_PATH = "resourceDefs.json";
+        public List<ResourceDefinition> Registry { get; private set; }
+        public DefinitionManager() { 
+            Registry = [];
+        }
+        public void ReadFiles() {
+            string jsonString = File.ReadAllText(RESOURCES_PATH);
+            var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
+            for (int i = 0;i < data.Resources.Count; i++) {
+                var def = data.Resources[i];
+                _keyToId[def.Key]= i;
+                _idToDef[i] = def;
+            }
+        }
+        public int GetId(string key) => _keyToId[key];
+        public ResourceDefinition GetDef(int id) => _idToDef[id];
+        private string GetConfigPath(string fileName) {
+            //for when we are done done then we place this next to the .exe
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            return Path.Combine(baseDir, "Data", fileName);
+        }
+        public void GenerateTemplate() {
+            string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            string dataPath = Path.Combine(projectRoot, "Data", "defs.json");
+            //string path = GetConfigPath(RESOURCES_PATH);
+            if (!File.Exists(dataPath)) {
+                Directory.CreateDirectory(Path.GetDirectoryName(dataPath));
+            }
+            var template = new GameDefinitions();
+            template.Resources.Add(new ResourceDefinition("stone","Stone"));
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(template, options);
+            File.WriteAllText(dataPath, json);
         }
     }
 }
@@ -628,11 +716,6 @@ namespace ProjWizInc.Core.Managers {
                 {"wood",0 },
                 {"gold",0 }
             };
-            int i = 0;
-            foreach (var r in ResourceDefs) {
-                _state.Resources.Add(i, r.Value);
-                i++;
-            }
         }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
@@ -944,6 +1027,20 @@ namespace ProjWizInc.WinForms
         }
     }
 }
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
+==============================================================================
+// See https://aka.ms/new-console-template for more information
+using ProjWizInc.Core.Managers;
+
+Console.WriteLine("Hello, World!");
+Console.WriteLine("Enter any key to exit...");
+DefinitionManager defs = new DefinitionManager();
+defs.GenerateTemplate();
+Console.ReadLine();
 
 
 

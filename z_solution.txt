@@ -322,8 +322,131 @@ namespace ProjWizInc.Core.Data {
 
 
 ==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Definitions.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions {
+    public class ResourceDefinition : DefinitionBase{
+        public ResourceDefinition() {
+        }
+    }
+    public class JobDefinition : DefinitionBase {
+        public List<FeatureInterface> Features { get; set; } = new();
+
+        // Helper method to quickly find a specific component
+        public T GetComponent<T>() where T : FeatureInterface {
+            return Features.OfType<T>().FirstOrDefault();
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Entries.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions {
+    //this entry can 
+    public class ResourcePayoutEntry : EntryInterface {
+        public string ResourceID { get; set; }
+        public BigNum Ammount { get; set; }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions {
+    public class PayoutFeature : FeatureInterface {
+        public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
+    }
+    public class RequiresTicksFeature : FeatureInterface {
+        public long RequiredTicks { get; set; } = 1000;
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\DefinitionBase.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public class DefinitionBase {
+        public string Key { get; protected set; } = string.Empty;
+        public string DisplayName { get; protected set; } = string.Empty;
+        public int Id { get; protected set; } = -1;
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\EntryInterface.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public interface EntryInterface {
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\FeatureInterface.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public interface FeatureInterface {
+        //we can add some fields here later like name or description for tooltips or flavor
+    }
+}
+
+
+
+==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs
 ==============================================================================
+using ProjWizInc.Core.ADT;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -336,6 +459,7 @@ namespace ProjWizInc.Core.Events {
     public readonly record struct AppStartedEvent(string Message);
     public readonly record struct GameStartedEvent();
     public readonly record struct TimeAdvancedEvent(long CurrentTime);
+    public readonly record struct ResourceGainedEvent(int id, BigNum ammount);
 }
 
 
@@ -361,10 +485,11 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _defs = new DefinitionManager();
+            _defs.ReadFiles();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);
-            _jobs = new JobManager(_event, _resources);
+            _jobs = new JobManager(_event, _defs);
             _gameLoop = new GameLoopManager(_event);
         }
         public void Start() {
@@ -391,6 +516,7 @@ namespace ProjWizInc.Core.Managers {
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\DefinitionManager.cs
 ==============================================================================
 using Microsoft.Win32;
+using ProjWizInc.Core.Definitions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -400,17 +526,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class ResourceDefinition {
-        public string Key { get; private set; }
-        public string DisplayName { get; private set; }
-        public ResourceDefinition(string key, string displayName) { 
-            Key = key;
-            DisplayName = displayName;
-        }
-
-    }
+    
     public class GameDefinitions {
         public List<ResourceDefinition> Resources { get; private set; } = [];
+        public List<JobDefinition> Jobs { get; private set; } = [];
     }
     public class DefinitionManager {
 
@@ -635,6 +754,7 @@ namespace ProjWizInc.Core.Managers {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
 ==============================================================================
+using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
@@ -647,12 +767,12 @@ using static System.Reflection.Metadata.BlobBuilder;
 namespace ProjWizInc.Core.Managers {
     internal class JobManager {
         private readonly EventBroker _events;
-        private readonly ResourceState _resources;
+        private readonly DefinitionManager _defs;
         private readonly List<JobState> _state = [];
-        public JobState? ActiveJob { get; private set; }
-        public JobManager(EventBroker events, ResourceManager resourceManager) {
+        public JobDefinition? ActiveJob { get; private set; }
+        public JobManager(EventBroker events, DefinitionManager defs) {
             _events = events;
-            _resources = resourceManager.State;
+            _defs = defs;
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public void ToggleTask(string id) {
@@ -667,11 +787,16 @@ namespace ProjWizInc.Core.Managers {
         }
         public void Update(UpdateLogicEvent e) {
             if (ActiveJob == null) { return; }
+            
             ActiveJob.Progress++;
             if (ActiveJob.Progress >= ActiveJob.TicksRequired) { 
                 ActiveJob.Progress -= ActiveJob.TicksRequired;
+                CompleteJob();
             }
-
+        }
+        private void CompleteJob() {
+            //int id = 
+            //_events.Publish(ResourceGainedEvent());
         }
     }
 }
@@ -694,10 +819,11 @@ using System.Threading.Tasks;
 namespace ProjWizInc.Core.Managers {
 
     public class ResourceState {
+        private static readonly Dictionary<int, BigNum> dictionary = [];
+
         //changed the dictionary to using ints instead of strings for faster searching
         //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
-        public Dictionary<int, BigNum> Resources { get; } = new() {
-        };
+        public Dictionary<int, BigNum> Resources { get; } = dictionary;
     }
     public class ResourceManager{
         
@@ -799,7 +925,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.States {
-    internal class JobState {
+    public class JobState {
         public string Id { get; private set; }
         public ResourceType RewardType { get; private set; }
         public int Progress { get; set; }

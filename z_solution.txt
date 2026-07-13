@@ -1,7 +1,6 @@
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\App.axaml.cs 
-============================================================================== 
- 
+﻿==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\App.axaml.cs
+==============================================================================
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
@@ -28,13 +27,14 @@ namespace AvaloniaApplication1 {
             base.OnFrameworkInitializationCompleted();
         }
     }
-} 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Program.cs 
-============================================================================== 
- 
-﻿using Avalonia;
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Program.cs
+==============================================================================
+using Avalonia;
 using System;
 
 namespace AvaloniaApplication1 {
@@ -57,12 +57,12 @@ namespace AvaloniaApplication1 {
                 .LogToTrace();
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewLocator.cs 
-============================================================================== 
- 
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewLocator.cs
+==============================================================================
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using AvaloniaApplication1.ViewModels;
@@ -96,13 +96,13 @@ namespace AvaloniaApplication1 {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\MainWindowViewModel.cs 
-============================================================================== 
- 
-﻿using Avalonia.Threading;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\MainWindowViewModel.cs
+==============================================================================
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
@@ -130,24 +130,24 @@ namespace AvaloniaApplication1.ViewModels {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ViewModelBase.cs 
-============================================================================== 
- 
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ViewModelBase.cs
+==============================================================================
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AvaloniaApplication1.ViewModels {
     public abstract class ViewModelBase : ObservableObject {
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Views\MainWindow.axaml.cs 
-============================================================================== 
- 
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Views\MainWindow.axaml.cs
+==============================================================================
 using Avalonia.Controls;
 using ProjWizInc.Core.Managers;
 
@@ -159,13 +159,14 @@ namespace AvaloniaApplication1.Views {
             InitializeComponent();
         }
     }
-} 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\ADT\BigNum.cs 
-============================================================================== 
- 
-﻿using System;
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\ADT\BigNum.cs
+==============================================================================
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Metadata;
@@ -198,7 +199,7 @@ namespace ProjWizInc.Core.ADT {
             int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
             double normMan = man / Math.Pow(10, shift);
             long normExp = exp + shift;
-            if (normMan > 0 && normExp < THRESH_POW) {
+            if (normMan >= 0 && normExp < THRESH_POW) {
                 _isLarge = false;
                 _small = (long)(normMan * Math.Pow(10,normExp));
                 _man = 0;
@@ -220,30 +221,13 @@ namespace ProjWizInc.Core.ADT {
                     return new BigNum(sum);
                 } else {
                     //= big now
-                    return new BigNum(0);
+                    return new BigNum((double)sum,0);
                 }
             }
             //if either numbers are big, we have to do the slower operation
             //if a is small, we just use the small, otherwise we take their man and exp
-            double man1;
-            long exp1;
-            if (a._isLarge) {
-                man1 = a._man;
-                exp1 = a._exp;
-            } else {
-                man1 = a._small;
-                exp1 = 0;
-            }
-            //same with b
-            double man2;
-            long exp2;
-            if (b._isLarge) {
-                man2 = b._man;
-                exp2 = b._exp;
-            } else {
-                man2 = b._small;
-                exp2 = 0;
-            }
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
             //ensure that a is smaller than b
             if (exp1 < exp2) {
                 double manTmp = man1;
@@ -254,46 +238,34 @@ namespace ProjWizInc.Core.ADT {
                 exp2 = expTmp;
             }
             long diff = exp1 - exp2;
-            if (diff < THRESHOLD) { 
+            if (diff > THRESH_POW) { 
                 return new BigNum(man1,exp1);
             } else {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
         public static BigNum operator *(BigNum a, BigNum b) {
-            double man1;
-            long exp1;
-            if (a._isLarge) {
-                man1 = a._man;
-                exp1 = a._exp;
-            } else {
-                man1 = a._small;
-                exp1 = 0;
-            }
-            //same with b
-            double man2;
-            long exp2;
-            if (b._isLarge) {
-                man2 = b._man;
-                exp2 = b._exp;
-            } else {
-                man2 = b._small;
-                exp2 = 0;
-            }
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
             return new BigNum(man1 * man2, exp1 + exp2);
+        }
+        private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
+        public override string ToString() {
+            if (!_isLarge) return _small.ToString("N0");
+            return $"{_man:F2}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
         public static implicit operator BigNum(long v) => new BigNum(v);
         public static implicit operator BigNum(double v) => new BigNum(v, 0);
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Data\Globals.cs 
-============================================================================== 
- 
-﻿using System;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Data\Globals.cs
+==============================================================================
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -316,13 +288,13 @@ namespace ProjWizInc.Core.Data {
     }
 
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs 
-============================================================================== 
- 
-﻿using System;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs
+==============================================================================
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -335,13 +307,13 @@ namespace ProjWizInc.Core.Events {
     public readonly record struct GameStartedEvent();
     public readonly record struct TimeAdvancedEvent(long CurrentTime);
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Managers;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -380,13 +352,13 @@ namespace ProjWizInc.Core.Managers {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventBroker.cs 
-============================================================================== 
- 
-﻿using System;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventBroker.cs
+==============================================================================
+using System;
 using System.Collections.Generic;
 
 namespace ProjWizInc.Core.Managers {
@@ -480,13 +452,13 @@ namespace ProjWizInc.Core.Managers {
 
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\GameLoopManager.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Events;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\GameLoopManager.cs
+==============================================================================
+using ProjWizInc.Core.Events;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -557,13 +529,13 @@ namespace ProjWizInc.Core.Managers {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Events;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
+==============================================================================
+using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
 using System.Collections.Generic;
@@ -603,13 +575,13 @@ namespace ProjWizInc.Core.Managers {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ResourceManager.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Data;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ResourceManager.cs
+==============================================================================
+using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
@@ -675,13 +647,13 @@ namespace ProjWizInc.Core.Managers {
 
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Data;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs
+==============================================================================
+using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States;
 using System;
@@ -723,13 +695,13 @@ namespace ProjWizInc.Core.Managers {
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\JobState.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Data;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\JobState.cs
+==============================================================================
+using ProjWizInc.Core.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -752,13 +724,13 @@ namespace ProjWizInc.Core.States {
 
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\MainGameState.cs 
-============================================================================== 
- 
-﻿using ProjWizInc.Core.Data;
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\MainGameState.cs
+==============================================================================
+using ProjWizInc.Core.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -774,12 +746,12 @@ namespace ProjWizInc.Core.States {
     }
     
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs 
-============================================================================== 
- 
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs
+==============================================================================
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
 using ProjWizInc.Core.States;
@@ -814,13 +786,13 @@ namespace ProjWizInc.WinForms
         }
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs 
-============================================================================== 
- 
-﻿namespace ProjWizInc.WinForms
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs
+==============================================================================
+namespace ProjWizInc.WinForms
 {
     partial class Form1
     {
@@ -934,12 +906,12 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.
         private Label labelGold;
     }
 }
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs 
-============================================================================== 
- 
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs
+==============================================================================
 namespace ProjWizInc.WinForms
 {
     internal static class Program
@@ -957,5 +929,7 @@ namespace ProjWizInc.WinForms
             Application.Run(new Form1());
         }
     }
-} 
- 
+}
+
+
+

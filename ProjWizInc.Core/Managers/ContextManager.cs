@@ -1,4 +1,4 @@
-﻿using ProjWizInc.Core.Managers;
+﻿using ProjWizInc.Core.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _defs = new DefinitionManager();
-            _defs.ReadFiles();
+            _defs.Init();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);

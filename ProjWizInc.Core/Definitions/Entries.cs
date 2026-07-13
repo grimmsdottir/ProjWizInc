@@ -8,8 +8,5 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
     //this entry can 
-    public class ResourcePayoutEntry : EntryInterface {
-        public string ResourceID { get; set; }
-        public BigNum Ammount { get; set; }
-    }
+    
 }

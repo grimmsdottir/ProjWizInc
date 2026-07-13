@@ -1,4 +1,295 @@
 ============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\App.axaml.cs 
+============================================================================== 
+ 
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Data.Core;
+using Avalonia.Data.Core.Plugins;
+using Avalonia.Markup.Xaml;
+using AvaloniaApplication1.ViewModels;
+using AvaloniaApplication1.Views;
+using System.Linq;
+
+namespace AvaloniaApplication1 {
+    public partial class App : Application {
+        public override void Initialize() {
+            AvaloniaXamlLoader.Load(this);
+        }
+
+        public override void OnFrameworkInitializationCompleted() {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
+                desktop.MainWindow = new MainWindow {
+                    DataContext = new MainWindowViewModel(),
+                };
+                ProjWizInc.Core.Managers.ContextManager.Instance.Start();
+            }
+
+            base.OnFrameworkInitializationCompleted();
+        }
+    }
+} 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Program.cs 
+============================================================================== 
+ 
+﻿using Avalonia;
+using System;
+
+namespace AvaloniaApplication1 {
+    internal sealed class Program {
+        // Initialization code. Don't use any Avalonia, third-party APIs or any
+        // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
+        // yet and stuff might break.
+        [STAThread]
+        public static void Main(string[] args) => BuildAvaloniaApp()
+            .StartWithClassicDesktopLifetime(args);
+
+        // Avalonia configuration, don't remove; also used by visual designer.
+        public static AppBuilder BuildAvaloniaApp()
+            => AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+#if DEBUG
+                .WithDeveloperTools()
+#endif
+                .WithInterFont()
+                .LogToTrace();
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewLocator.cs 
+============================================================================== 
+ 
+using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using AvaloniaApplication1.ViewModels;
+using System;
+using System.Diagnostics.CodeAnalysis;
+
+namespace AvaloniaApplication1 {
+    /// <summary>
+    /// Given a view model, returns the corresponding view if possible.
+    /// </summary>
+    [RequiresUnreferencedCode(
+        "Default implementation of ViewLocator involves reflection which may be trimmed away.",
+        Url = "https://docs.avaloniaui.net/docs/concepts/view-locator")]
+    public class ViewLocator : IDataTemplate {
+        public Control? Build(object? param) {
+            if (param is null)
+                return null;
+
+            var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
+            var type = Type.GetType(name);
+
+            if (type != null) {
+                return (Control)Activator.CreateInstance(type)!;
+            }
+
+            return new TextBlock { Text = "Not Found: " + name };
+        }
+
+        public bool Match(object? data) {
+            return data is ViewModelBase;
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\MainWindowViewModel.cs 
+============================================================================== 
+ 
+﻿using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+
+namespace AvaloniaApplication1.ViewModels {
+    public partial class MainWindowViewModel : ViewModelBase {
+        public string Greeting { get; } = "Welcome to Avalonia!";
+        private readonly ContextManager _context;
+        [ObservableProperty]
+        private string _timeDisplay = "Time: 0";
+        public MainWindowViewModel() {
+            if (Avalonia.Controls.Design.IsDesignMode) return;
+
+            ContextManager.Instance.Subscribe<UpdateRenderEvent>(OnRenderPulse);
+        }
+        private void OnRenderPulse(UpdateRenderEvent e) {
+            // Polling the core logic
+            var time = ContextManager.Instance.GetTimeState().TimeElapsed;
+
+            // Marshaling back to the UI thread
+            Dispatcher.UIThread.Post(() =>
+            {
+                TimeDisplay = $"Time: {time}";
+            });
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ViewModelBase.cs 
+============================================================================== 
+ 
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace AvaloniaApplication1.ViewModels {
+    public abstract class ViewModelBase : ObservableObject {
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Views\MainWindow.axaml.cs 
+============================================================================== 
+ 
+using Avalonia.Controls;
+using ProjWizInc.Core.Managers;
+
+namespace AvaloniaApplication1.Views {
+    public partial class MainWindow : Window {
+        private readonly ContextManager _context;
+        public MainWindow() {
+            
+            InitializeComponent();
+        }
+    }
+} 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\ADT\BigNum.cs 
+============================================================================== 
+ 
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Metadata;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.ADT {
+    public readonly record struct BigNum {
+        private readonly long _small;
+        private readonly double _man;
+        private readonly long _exp;
+        private readonly bool _isLarge;
+
+        private const long THRESHOLD = 1_000_000_000_000_000L; // 1e15
+        private const int THRESH_POW = 15;
+        private const double EPSILON = 1e-15;
+
+        public BigNum(long value) {
+            _isLarge = false;
+            _small = value;
+            _man = 0;
+            _exp = 0;
+        }
+        public BigNum(int value) : this((long)value) { }
+        public BigNum(double man, long exp) {
+            if (Math.Abs(man) < EPSILON) {
+                this = new BigNum(0);
+                return;
+            }
+            int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
+            double normMan = man / Math.Pow(10, shift);
+            long normExp = exp + shift;
+            if (normMan > 0 && normExp < THRESH_POW) {
+                _isLarge = false;
+                _small = (long)(normMan * Math.Pow(10,normExp));
+                _man = 0;
+                _exp = 0;
+            } else {
+                _isLarge = true;
+                _small = 0;
+                _man = normMan;
+                _exp = normExp;
+            }
+        }
+
+        public static BigNum operator +(BigNum a, BigNum b) {
+            //small + small
+            if (!a._isLarge && !b._isLarge) {
+                long sum = a._small + b._small;
+                if (Math.Abs(sum) < THRESHOLD) {
+                    //= still small
+                    return new BigNum(sum);
+                } else {
+                    //= big now
+                    return new BigNum(0);
+                }
+            }
+            //if either numbers are big, we have to do the slower operation
+            //if a is small, we just use the small, otherwise we take their man and exp
+            double man1;
+            long exp1;
+            if (a._isLarge) {
+                man1 = a._man;
+                exp1 = a._exp;
+            } else {
+                man1 = a._small;
+                exp1 = 0;
+            }
+            //same with b
+            double man2;
+            long exp2;
+            if (b._isLarge) {
+                man2 = b._man;
+                exp2 = b._exp;
+            } else {
+                man2 = b._small;
+                exp2 = 0;
+            }
+            //ensure that a is smaller than b
+            if (exp1 < exp2) {
+                double manTmp = man1;
+                long expTmp = exp1;
+                man1 = man2;
+                exp1 = exp2;
+                man2 = manTmp;
+                exp2 = expTmp;
+            }
+            long diff = exp1 - exp2;
+            if (diff < THRESHOLD) { 
+                return new BigNum(man1,exp1);
+            } else {
+                return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
+            }
+        }
+        public static BigNum operator *(BigNum a, BigNum b) {
+            double man1;
+            long exp1;
+            if (a._isLarge) {
+                man1 = a._man;
+                exp1 = a._exp;
+            } else {
+                man1 = a._small;
+                exp1 = 0;
+            }
+            //same with b
+            double man2;
+            long exp2;
+            if (b._isLarge) {
+                man2 = b._man;
+                exp2 = b._exp;
+            } else {
+                man2 = b._small;
+                exp2 = 0;
+            }
+            return new BigNum(man1 * man2, exp1 + exp2);
+        }
+        //these 2 lines allow us to natively/automatically turn numbers into BigNums
+        public static implicit operator BigNum(long v) => new BigNum(v);
+        public static implicit operator BigNum(double v) => new BigNum(v, 0);
+    }
+}
+ 
+ 
+============================================================================== 
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Data\Globals.cs 
 ============================================================================== 
  
@@ -15,8 +306,14 @@ namespace ProjWizInc.Core.Data {
 
         public static readonly double TICK_LENGTH = 1.0 / TICKS_PER_SECOND;
         public static readonly double FRAME_LENGTH_MS = 1000.0 / FRAMES_PER_SECOND;
+
+        
     }
-    
+    public enum ResourceType {
+        Gold,
+        Wood,
+        Stone
+    }
 
 }
  
@@ -44,7 +341,7 @@ namespace ProjWizInc.Core.Events {
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs 
 ============================================================================== 
  
-﻿using ProjWizInc.Core.System;
+﻿using ProjWizInc.Core.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -55,13 +352,15 @@ namespace ProjWizInc.Core.Managers {
     public class ContextManager {
         private readonly EventBroker _event;
         private readonly TimeManager _time;
-        private readonly ProfileManager _profile;
+        private readonly ResourceManager _resources;
+        private readonly JobManager _jobs;
         private readonly GameLoopManager _gameLoop;
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _event = new EventBroker();
             _time = new TimeManager(_event);
-            _profile = new ProfileManager(_event);
+            _resources = new ResourceManager(_event);
+            _jobs = new JobManager(_event, _resources);
             _gameLoop = new GameLoopManager(_event);
         }
         public void Start() {
@@ -75,6 +374,9 @@ namespace ProjWizInc.Core.Managers {
         }
         public void Publish<T>(T eventArgs) {
             _event.Publish(eventArgs);
+        }
+        public TimeState GetTimeState() {
+            return _time.State;
         }
     }
 }
@@ -110,7 +412,7 @@ namespace ProjWizInc.Core.Managers {
     public class EventBroker{
         private readonly Dictionary<Type, Delegate[]> _subscribers = [];
         //we use this funky thing as a lock to make it thread safe and prevent race conditions
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
         public void Subscribe<T>(Action<T> handler) {
             var type = typeof(T);
             lock (_lock) {
@@ -194,7 +496,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static ProjWizInc.Core.Data.Globals;
 
-namespace ProjWizInc.Core.System {
+namespace ProjWizInc.Core.Managers {
     
     public class GameLoopManager {
         
@@ -258,7 +560,53 @@ namespace ProjWizInc.Core.System {
  
  
 ============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ProfileManager.cs 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using static System.Reflection.Metadata.BlobBuilder;
+
+namespace ProjWizInc.Core.Managers {
+    internal class JobManager {
+        private readonly EventBroker _events;
+        private readonly ResourceState _resources;
+        private readonly List<JobState> _state = [];
+        public JobState? ActiveJob { get; private set; }
+        public JobManager(EventBroker events, ResourceManager resourceManager) {
+            _events = events;
+            _resources = resourceManager.State;
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public void ToggleTask(string id) {
+            if (ActiveJob?.Id == id) {
+                ActiveJob = null;
+            } else {
+                ActiveJob = _state.Find(j => j.Id == id);
+                if (ActiveJob == null) { 
+                    //log this as an error
+                }
+            }
+        }
+        public void Update(UpdateLogicEvent e) {
+            if (ActiveJob == null) { return; }
+            ActiveJob.Progress++;
+            if (ActiveJob.Progress >= ActiveJob.TicksRequired) { 
+                ActiveJob.Progress -= ActiveJob.TicksRequired;
+            }
+
+        }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ResourceManager.cs 
 ============================================================================== 
  
 ﻿using ProjWizInc.Core.Data;
@@ -270,38 +618,61 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.System {
-    
-    public class ProfileManager{
+namespace ProjWizInc.Core.Managers {
+
+    public class ResourceState {
+        //changed the dictionary to using ints instead of strings for faster searching
+        //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
+        public Dictionary<int, long> Resources { get; } = new() {
+        };
+    }
+    public class ResourceManager{
+        
         private readonly EventBroker _events;
-        public ProfileManager(EventBroker events) {
+        private readonly ResourceState _state = new();
+        private readonly object _lock = new ();
+        public ResourceManager(EventBroker events) {
             _events = events; 
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
+        public ResourceState State => _state;
         public void Init() {
+            //read json later, for now we have hard coded thing
+            Dictionary<string, long> ResourceDefs = new() {
+                {"stone",0 },
+                {"wood",0 },
+                {"gold",0 }
+            };
+            int i = 0;
+            foreach (var r in ResourceDefs) {
+                _state.Resources.Add(i, r.Value);
+                i++;
+            }
         }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {
             
         }
+        public void AddResource(int resourceID, long amount) {
+            lock (_lock) {
+                if (!_state.Resources.ContainsKey(resourceID)) {
+                    _state.Resources[resourceID] = 0;
+                }
+                _state.Resources[resourceID] += amount;
+            }            
+        }
+        public long GetResource(int resourceID) {
+            lock (_lock) {
+                if (!_state.Resources.ContainsKey(resourceID)) {
+                    _state.Resources[resourceID] = 0;
+                }
+                return _state.Resources[resourceID];
+            }
+           
 
-    }
-}
- 
- 
-============================================================================== 
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TaskLogic.cs 
-============================================================================== 
- 
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+        }
 
-namespace ProjWizInc.Core.System {
-    internal class TaskLogic {
     }
 }
  
@@ -326,11 +697,11 @@ namespace ProjWizInc.Core.Managers {
     }
     public class TimeManager {
         private readonly EventBroker _events;
-        private readonly TimeState _state;
+        private readonly TimeState _state = new();
+        public TimeState State => _state;
 
         public TimeManager(EventBroker events) {
             _events = events;
-            _state = new TimeState();
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public void Init() {
@@ -350,6 +721,35 @@ namespace ProjWizInc.Core.Managers {
                 _state.TimeElapsed++;
             }
         }
+    }
+}
+ 
+ 
+============================================================================== 
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\JobState.cs 
+============================================================================== 
+ 
+﻿using ProjWizInc.Core.Data;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States {
+    internal class JobState {
+        public string Id { get; private set; }
+        public ResourceType RewardType { get; private set; }
+        public int Progress { get; set; }
+        public int TicksRequired {  get; private set; }
+        public long Payout {  get; private set; }
+        public JobState(string id, ResourceType rewardType, int ticksRequired, long payout   ) {
+            Id = id;
+            RewardType = rewardType;
+            TicksRequired = ticksRequired;
+            Payout = payout;
+        }
+
     }
 }
  

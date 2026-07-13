@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.States {
-    internal class JobState {
+    public class JobState {
         public string Id { get; private set; }
         public ResourceType RewardType { get; private set; }
         public int Progress { get; set; }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ProjWizInc.Core.ADT;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,4 +11,5 @@ namespace ProjWizInc.Core.Events {
     public readonly record struct AppStartedEvent(string Message);
     public readonly record struct GameStartedEvent();
     public readonly record struct TimeAdvancedEvent(long CurrentTime);
+    public readonly record struct ResourceGainedEvent(int id, BigNum ammount);
 }

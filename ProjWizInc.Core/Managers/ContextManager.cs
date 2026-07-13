@@ -16,10 +16,11 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager Instance { get; } = new ContextManager();
         private ContextManager() { 
             _defs = new DefinitionManager();
+            _defs.ReadFiles();
             _event = new EventBroker();
             _time = new TimeManager(_event);
             _resources = new ResourceManager(_event);
-            _jobs = new JobManager(_event, _resources);
+            _jobs = new JobManager(_event, _defs);
             _gameLoop = new GameLoopManager(_event);
         }
         public void Start() {

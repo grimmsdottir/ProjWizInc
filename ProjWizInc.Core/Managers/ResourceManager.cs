@@ -11,10 +11,11 @@ using System.Threading.Tasks;
 namespace ProjWizInc.Core.Managers {
 
     public class ResourceState {
+        private static readonly Dictionary<int, BigNum> dictionary = [];
+
         //changed the dictionary to using ints instead of strings for faster searching
         //do we use a state even if it is just one variable(i know its a list, but it still counts as one)
-        public Dictionary<int, BigNum> Resources { get; } = new() {
-        };
+        public Dictionary<int, BigNum> Resources { get; } = dictionary;
     }
     public class ResourceManager{
         

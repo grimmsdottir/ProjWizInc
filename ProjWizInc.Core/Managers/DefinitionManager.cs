@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using ProjWizInc.Core.Definitions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,17 +9,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class ResourceDefinition {
-        public string Key { get; private set; }
-        public string DisplayName { get; private set; }
-        public ResourceDefinition(string key, string displayName) { 
-            Key = key;
-            DisplayName = displayName;
-        }
-
-    }
+    
     public class GameDefinitions {
         public List<ResourceDefinition> Resources { get; private set; } = [];
+        public List<JobDefinition> Jobs { get; private set; } = [];
     }
     public class DefinitionManager {
 

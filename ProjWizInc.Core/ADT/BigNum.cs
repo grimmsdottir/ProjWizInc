@@ -18,6 +18,10 @@ namespace ProjWizInc.Core.ADT {
         private const int THRESH_POW = 15;
         private const double EPSILON = 1e-15;
 
+        //public getters
+        public double Man => _man;
+        public long Exp => _exp;
+        
         public BigNum(long value) {
             _isLarge = false;
             _small = value;
@@ -79,14 +83,18 @@ namespace ProjWizInc.Core.ADT {
             if (a._isNegative != b._isNegative) { return a - b; }
             //small + small
             if (!a._isLarge && !b._isLarge) {
-                long sum = a._small + b._small;
-                if (Math.Abs(sum) < THRESHOLD) {
-                    //= still small
-                    return new BigNum(sum);
+                //if we add 2 smalls together, they can cross the boundry and overflow if we did a simple long sum
+                //doubles can hold more than longs, so we can use double addition to be safe. precision should not matter
+                //at the long boundry, 9e18
+                double testSum = (double)a._small + (double)b._small;
+                if (testSum <= long.MinValue || testSum >= long.MaxValue) {
+                    //we can just use our constructor to resolve the addition, since we already added it
+                    return new BigNum(testSum);
                 } else {
-                    //= big now
-                    return new BigNum((double)sum,0);
-                }
+                    //in this case we can just return the 2 smalls added together
+                    //we dont use testSum because its a double and we dont need to lose precision over that
+                    return new BigNum(a._small + b._small);
+                }                
             }
             //if either numbers are big, we have to do the slower operation
             //if a is small, we just use the small, otherwise we take their man and exp
@@ -108,6 +116,7 @@ namespace ProjWizInc.Core.ADT {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
+        public bool IsLarge() { return _isLarge; }
         public static BigNum operator ++(BigNum a) {
             if (a._isLarge) {  return a; }
             return a + 1;
@@ -133,7 +142,16 @@ namespace ProjWizInc.Core.ADT {
         private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
         //comparator section
         public static bool operator >(BigNum a, BigNum b) {
-            if (a._exp != b._exp) return a._exp > b._exp;
+            //if both a and b are small, we do a regular comparison
+            if (!a._isLarge && !b._isLarge) { 
+                return a._small > b._small;
+            }
+            long expA = a._exp; 
+            long expB = b._exp;
+            //for the most time, we just need to compare exponents
+            if (expA > expB) { return true; }
+            if (expA < expB) { return false; }
+            //if the code reached here, that means the exponents are equal, so we just compare mantissas
             return a._man > b._man;
         }
         public static bool operator <(BigNum a, BigNum b) => b > a;

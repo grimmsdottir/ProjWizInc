@@ -34,8 +34,8 @@ namespace ProjWizInc.Core.Managers {
         }
         private void AdvanceTick() {
             _state.TicksElapsed++;
-            if (_state.TicksElapsed >= Globals.TICKS_PER_SECOND) {
-                _state.TicksElapsed -= Globals.TICKS_PER_SECOND;
+            if (_state.TicksElapsed >= Globals.LOGIC_TPS) {
+                _state.TicksElapsed -= Globals.LOGIC_TPS;
                 _state.TimeElapsed++;
             }
         }

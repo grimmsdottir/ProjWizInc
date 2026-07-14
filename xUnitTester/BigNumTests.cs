@@ -2,6 +2,89 @@ using ProjWizInc.Core.ADT;
 
 namespace xUnitTester {
     public class BigNumTests {
+        //reminder that our boundry is around 2e15
+        private const int NUM_0 = 0;
+        private const int NUM_1 = 1;
+        private const int NUM_SMALL = 1000;
+        private const double NUM_BIG = 1e25;
+        /*
+         * CONSTRUCTOR AND PATH TESTS
+         */
+        [Fact]
+        public void Constructor_SmallWholeNumber_IsNotLarge() {
+            BigNum val = new(NUM_SMALL);
+            //if val isLarge, than the test fails, otherwise it passes
+            Assert.False(val.IsLarge());
+        }
+        [Fact]
+        public void Constructor_BigNumber_IsLarge() {
+            BigNum val = new(NUM_BIG);
+            //if val is not Large, than the test fails, otherwise it passes
+            Assert.True(val.IsLarge());
+        }
+        [Theory]
+        [InlineData(150, 0, 1.5, 2)]          // Over 10: 150e0 -> 1.5e2
+        [InlineData(0.01, 5, 1.0, 3)]         // Under 1: 0.01e5 -> 1.0e3
+        [InlineData(950, 10, 9.5, 12)]        // Standard normalization
+        [InlineData(0.0001, -2, 1.0, -6)]     // Negative exponents
+        public void Constructor_AlwaysNormalizesCorrectly(double mIn, long eIn, double mExp, long eExp) {
+            // Act
+            var val = new BigNum(mIn, eIn);
+
+            // Assert
+            // We check the internal components. 
+            // (Note: You might need to make these internal or public for the test)
+            Assert.Equal(eExp, val.Exponent);
+            Assert.Equal(mExp, val.Mantissa, 5); // 5 decimal places of precision
+        }
+        [Fact]
+        public void Addition_CrossesThreshold_Successfully() {
+            // Arrange: Use a number just below long.MaxValue (approx 9e18)
+            BigNum a = new BigNum(9_000_000_000_000_000_000L);
+            BigNum b = new BigNum(2_000_000_000_000_000_000L);
+
+            // Act
+            BigNum result = a + b;
+
+            // Assert
+            Assert.True(result.IsLarge());
+            // 9e18 + 2e18 = 1.10e19
+            Assert.Equal("1.10e19", result.ToString());
+        }
+        [Fact]
+        public void Addition_MassivePlusTiny_HandlesAbsorption() {
+            BigNum massive = BigNum.Parse("1.00e25");
+            BigNum tiny = new BigNum(1);
+
+            BigNum result = massive + tiny;
+
+            // In a double-mantissa system, 1.00e25 + 1 is still 1.00e25
+            // This test ensures your normalization logic doesn't freak out.
+            Assert.Equal("1.00e25", result.ToString());
+        }
+        [Theory]
+        [InlineData("0.5", "0.5", "1")]      // Two halves make a whole
+        [InlineData("0.1", "10", "1")]       // Multiplication test: 0.1 * 10 = 1
+        public void Decimals_CalculateCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            // Test both addition and multiplication
+            if (valB == "0.5") Assert.Equal(expected, (a + b).ToString());
+            if (valB == "10") Assert.Equal(expected, (a * 10).ToString());
+        }
+        [Theory]
+        [InlineData("1.00e10", "5.00e9", true)]  // Scientific vs Scientific (Different exponents)
+        [InlineData("1000", "999", true)]        // Long vs Long
+        [InlineData("1.00e3", "999", true)]      // Scientific vs Long
+        [InlineData("500", "1.00e2", true)]      // Long vs Scientific
+        public void Comparison_GreaterAndLess_Works(string big, string small, bool expected) {
+            BigNum a = BigNum.Parse(big);
+            BigNum b = BigNum.Parse(small);
+
+            Assert.Equal(expected, a > b);
+            Assert.Equal(!expected, a < b);
+        }
         //check if we can read valid numbers correctly
         [Theory]
         [InlineData("100", 100)]

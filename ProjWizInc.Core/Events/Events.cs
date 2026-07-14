@@ -12,4 +12,5 @@ namespace ProjWizInc.Core.Events {
     public readonly record struct GameStartedEvent();
     public readonly record struct TimeAdvancedEvent(long CurrentTime);
     public readonly record struct ResourceGainedEvent(int Id, BigNum Amount);
+    public readonly record struct JobCompleted(int Id);
 }

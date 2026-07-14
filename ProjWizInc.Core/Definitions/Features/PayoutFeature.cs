@@ -21,11 +21,5 @@ namespace ProjWizInc.Core.Definitions.Features {
                 entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
             }   
         }
-        public void Payout(EventBroker broker) {
-            foreach (ResourcePayoutEntry entry in PayoutEntries) {
-                //manager.AddResource(entry.ResourceID,entry.Amount);
-                broker.Publish<ResourceGainedEvent>(entry.ResourceID,entry.Amount);
-            }
-        }
     }
 }

@@ -75,8 +75,13 @@ namespace ProjWizInc.Core.Managers {
         }
         private void CompleteJob() {
             if (_state.JobPayout != null) {
-                
+                foreach (ResourcePayoutEntry entry in _state.JobPayout.PayoutEntries) {
+                    int id = entry.ResourceID;
+                    BigNum amount = entry.Amount;
+                    _events.Publish(new ResourceGainedEvent(id,amount));
+                }
             }
+            _events.Publish(new JobCompleted(_state.ActiveJobID));
         }
     }
 }

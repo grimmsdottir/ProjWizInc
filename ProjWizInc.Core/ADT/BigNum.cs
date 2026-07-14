@@ -25,6 +25,7 @@ namespace ProjWizInc.Core.ADT {
             _isNegative = value >= 0;
         }
         public BigNum(int value) : this((long)value) { }
+        public BigNum(double value) : this((long)value) { }
         public BigNum(double man, long exp) {
             if (Math.Abs(man) < EPSILON || man == 0) {
                 this = new BigNum(0);
@@ -111,14 +112,24 @@ namespace ProjWizInc.Core.ADT {
         public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
         public static bool operator <=(BigNum a, BigNum b) => b >= a;
         public static BigNum Parse(string s) {
-            //if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
+            if (string.IsNullOrWhiteSpace(s)) {
+                throw new ArgumentException("Cannot parse empty string to BigNum");
+            }
+            //gotta trim whitespace for JSON and user input
+            s = s.Trim();
+            //case 1: scientific notation(1.0e50)
+            if (s.Contains('e', StringComparison.OrdinalIgnoreCase)) {
+                string[] parts = s.Split(new[] { 'e', 'E' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length != 2) throw new FormatException("Invalid scientific notation format.");
 
-            if (s.Contains('e') || s.Contains('E')) {
-                string[] parts = s.Split('e', 'E');
                 return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
             }
+            //case 2: smaller decimals. as it is it just yeets fractionals and turns doubles to longs
+            if (s.Contains('.')) {
+                return new BigNum(double.Parse(s));
+            }
+            //case 3: standard long input
             return new BigNum(long.Parse(s));
-            throw new FormatException($"String '{s}' was not in a recognized format for BigNum.");
         }
         public override string ToString() {
             if (!_isLarge) return _small.ToString("N0");

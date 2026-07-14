@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.ADT {
     public readonly record struct BigNum {
-        private readonly long _small;
+        private readonly double _small;
         private readonly double _man;
         private readonly long _exp;
         private readonly bool _isLarge;
@@ -19,12 +19,12 @@ namespace ProjWizInc.Core.ADT {
         private const double EPSILON = 1e-15;
 
         //public getters
-        public long Small => _small;
+        public double Small => _small;
         public double Man => _man;
         public long Exp => _exp;
         public bool IsLarge => _isLarge;
         public bool IsNegative => _isNegative;
-        public BigNum(int value) : this((long)value,0) { }
+        public BigNum(int value) : this((double)value,0) { }
         public BigNum(long value) : this(value,0) { }
         public BigNum(double value) : this(value, 0) { }
         public BigNum(double man, long exp) {
@@ -47,23 +47,21 @@ namespace ProjWizInc.Core.ADT {
                 man /= 10;
                 exp++;
             }
+            //we dont need the funky old check, we can just check if the double is less than the threshold
             //lastly we check if the resulting man-exp is actually small enough to fit in a long
             double manExp = man * Math.Pow(10, exp);
             //quick check if the number is negative
             _isNegative = man < 0;
-            //is the exponent between 0 and 18, and is it a whole number
-            if (exp >= 0 && exp <= 18 && manExp % 1 == 0) {
-                //it can be a long
-                _small = (long)manExp;
+            if (manExp < THRESHOLD) {
+                //it can be a double
+                _small = manExp;
                 _isLarge = false;
-                
-                
             } else {
                 //its big enough to need the full man-exp
                 _small = 0;
                 _isLarge = true;
             }
-            //normal small long numbers dont have man or exp, but since this one came to us malformed
+            //normal small long numbers dont need man or exp, but since this one came to us malformed
             //we just leave it in in case its important
             //regardless we will want to set the man and exp, so no need to repeat it twice below
             _man = man;
@@ -146,9 +144,36 @@ namespace ProjWizInc.Core.ADT {
             //if the code reached here, that means the exponents are equal, so we just compare mantissas
             return a._man > b._man;
         }
-        public static bool operator <(BigNum a, BigNum b) => b > a;
-        public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
-        public static bool operator <=(BigNum a, BigNum b) => b >= a;
+        public static bool operator <(BigNum a, BigNum b) {
+            return !(a > b) && !(a==b);
+        
+        }
+        public static bool operator >=(BigNum a, BigNum b) {
+           return (a > b) && (a == b);
+        }
+        public static bool operator <=(BigNum a, BigNum b) {
+            return (a < b) && (a == b);
+        }
+        /*
+         * because BigNum is a struct, it uses Equals to operate ==, so this is not used
+        public static bool operator ==(BigNum a, BigNum b) {}
+        */
+        public bool Equals(BigNum other) {
+            //if one is bigly, and the other isnt, its clearly not the same already
+            if (IsLarge != other.IsLarge) { return false; }
+            //if they are both small numbers, we minus the two of them and if the difference is less than
+            //the epsilon, its good enough to be equal
+            if (!IsLarge) {
+                return Math.Abs(Small - other.Small) < EPSILON;
+            }
+            //otherwise they are both big numbers
+            if (_exp == other._exp) {
+                return Math.Abs(_man - other._man) < EPSILON;
+            }
+            return false;
+        }
+        //this also apparently important?
+        public override int GetHashCode() => HashCode.Combine(_small, _man, _exp, _isLarge);
         public static BigNum Parse(string s) {
             if (string.IsNullOrWhiteSpace(s)) {
                 throw new ArgumentException("Cannot parse empty string to BigNum");

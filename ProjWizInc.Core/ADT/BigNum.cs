@@ -19,8 +19,11 @@ namespace ProjWizInc.Core.ADT {
         private const double EPSILON = 1e-15;
 
         //public getters
+        public long Small => _small;
         public double Man => _man;
         public long Exp => _exp;
+        public bool IsLarge => _isLarge;
+        public bool IsNegative => _isNegative;
         
         public BigNum(long value) {
             _isLarge = false;
@@ -59,25 +62,46 @@ namespace ProjWizInc.Core.ADT {
             }
         }
         public BigNum(double man, long exp) {
-            if (Math.Abs(man) < EPSILON || man == 0) {
-                this = new BigNum(0);
-                return;
-            }
-            _isNegative = man >= 0;
-            int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
-            double normMan = man / Math.Pow(10, shift);
-            long normExp = exp + shift;
-            if (normMan >= 0 && normExp < THRESH_POW) {
-                _isLarge = false;
-                _small = (long)(normMan * Math.Pow(10,normExp));
+            //first we check if we are dumb enough to try passing in 0
+            if (man == 0) {
                 _man = 0;
                 _exp = 0;
-            } else {
-                _isLarge = true;
                 _small = 0;
-                _man = normMan;
-                _exp = normExp;
+                _isLarge = false;
+                return;
             }
+            //we check for the "internal exponent" like 150 should be 1.5e2
+            long intExp = (long)Math.Floor(Math.Log10(man));
+            //we pass along the internal exponent to the real exponent
+            exp += intExp;
+            //and we flatten the mantissa down to be >= 1 && <10
+            man /= Math.Pow(10, intExp);
+            //sometimes we might end up with funky mantissas remaining like 10.00000000001 
+            if (Math.Abs(man) >= 10) {
+                man /= 10;
+                exp++;
+            }
+            //lastly we check if the resulting man-exp is actually small enough to fit in a long
+            double manExp = man * Math.Pow(10, exp);
+            //quick check if the number is negative
+            _isNegative = man < 0;
+            //is the exponent between 0 and 18, and is it a whole number
+            if (exp >= 0 && exp <= 18 && manExp % 1 == 0) {
+                //it can be a long
+                _small = (long)manExp;
+                _isLarge = false;
+                
+                
+            } else {
+                //its big enough to need the full man-exp
+                _small = 0;
+                _isLarge = true;
+            }
+            //normal small long numbers dont have man or exp, but since this one came to us malformed
+            //we just leave it in in case its important
+            //regardless we will want to set the man and exp, so no need to repeat it twice below
+            _man = man;
+            _exp = exp;
         }
         public static BigNum operator +(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a - b; }
@@ -116,7 +140,6 @@ namespace ProjWizInc.Core.ADT {
                 return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
             }
         }
-        public bool IsLarge() { return _isLarge; }
         public static BigNum operator ++(BigNum a) {
             if (a._isLarge) {  return a; }
             return a + 1;

@@ -14,13 +14,13 @@ namespace xUnitTester {
         public void Constructor_SmallWholeNumber_IsNotLarge() {
             BigNum val = new(NUM_SMALL);
             //if val isLarge, than the test fails, otherwise it passes
-            Assert.False(val.IsLarge());
+            Assert.False(val.IsLarge);
         }
         [Fact]
         public void Constructor_BigNumber_IsLarge() {
             BigNum val = new(NUM_BIG);
             //if val is not Large, than the test fails, otherwise it passes
-            Assert.True(val.IsLarge());
+            Assert.True(val.IsLarge);
         }
         [Theory]
         [InlineData(150, 0, 1.5, 2)]          // Over 10: 150e0 -> 1.5e2
@@ -34,8 +34,38 @@ namespace xUnitTester {
             // Assert
             // We check the internal components. 
             // (Note: You might need to make these internal or public for the test)
-            Assert.Equal(eExp, val.Exponent);
-            Assert.Equal(mExp, val.Mantissa, 5); // 5 decimal places of precision
+            Assert.Equal(eExp, val.Exp);
+            Assert.Equal(mExp, val.Man, 5); // 5 decimal places of precision
+        }
+        [Theory]
+        [InlineData(150, 0, 150, false)]      // Should downshift to long
+        [InlineData(1.5, 2, 150, false)]      // Should downshift to long
+        [InlineData(1.5, 20, 0, true)]        // Stays large
+        [InlineData(0.01, 0, 0, true)]        // Decimals are always large (Scientific path)
+        public void Constructor_Normalization_PathCheck(double mIn, long eIn, long expectedSmall, bool expectedIsLarge) {
+            var val = new BigNum(mIn, eIn);
+
+            Assert.Equal(expectedIsLarge, val.IsLarge);
+            if (!expectedIsLarge) {
+                Assert.Equal(expectedSmall, val.Small);
+            }
+        }
+        [Fact]
+        public void Constructor_ExtremeUnnormalized_NormalizesCorrectly() {
+            // 1,000,000e0 should become 1e6
+            var val = new BigNum(1_000_000, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(6, val.Exp);
+        }
+
+        [Fact]
+        public void Constructor_TinyDecimal_NormalizesCorrectly() {
+            // 0.000001e0 should become 1e-6
+            var val = new BigNum(0.000001, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(-6, val.Exp);
         }
         [Fact]
         public void Addition_CrossesThreshold_Successfully() {
@@ -47,7 +77,7 @@ namespace xUnitTester {
             BigNum result = a + b;
 
             // Assert
-            Assert.True(result.IsLarge());
+            Assert.True(result.IsLarge);
             // 9e18 + 2e18 = 1.10e19
             Assert.Equal("1.10e19", result.ToString());
         }

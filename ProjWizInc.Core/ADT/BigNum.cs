@@ -24,43 +24,9 @@ namespace ProjWizInc.Core.ADT {
         public long Exp => _exp;
         public bool IsLarge => _isLarge;
         public bool IsNegative => _isNegative;
-        
-        public BigNum(long value) {
-            _isLarge = false;
-            _small = value;
-            _man = 0;
-            _exp = 0;
-            _isNegative = value >= 0;
-        }
-        public BigNum(String s) {
-            this = Parse(s);
-        }
-        public BigNum(int value) : this((long)value) { }
-        public BigNum(double value) {
-            //this case is what if a long/int was casted to a double then passed in
-            //also i forgot that doubles go all to the way to 1.8e308, compared to long's 9.0e18
-            if (value % 1 == 0 && value <= long.MaxValue && value >= long.MinValue) { 
-                _small = (long)value;
-                _exp = 0;
-                _man = value;
-                _isLarge = false;
-                if (value > 0) {
-                    _isNegative = false;
-                } else {
-                    _isNegative = true;
-                }
-            } else {
-                //this case means it is a decimal/fractional or much bigger than a long
-                _isLarge = true;
-                _small = 0;
-                //holy math stack batman
-                //so first, we take the absolute value of value, because logs dont like negative numbers
-                //then we get the log10 of the value, which gives us basically the number of zeros in the value
-                //then we floor and long it, because we dont need all that other fractionals for an exponent
-                _exp = (long)Math.Floor(Math.Log10(Math.Abs(value)));
-                _man = value / Math.Pow(10, _exp);
-            }
-        }
+        public BigNum(int value) : this((long)value,0) { }
+        public BigNum(long value) : this(value,0) { }
+        public BigNum(double value) : this(value, 0) { }
         public BigNum(double man, long exp) {
             //first we check if we are dumb enough to try passing in 0
             if (man == 0) {
@@ -102,6 +68,9 @@ namespace ProjWizInc.Core.ADT {
             //regardless we will want to set the man and exp, so no need to repeat it twice below
             _man = man;
             _exp = exp;
+        }
+        public BigNum(String s) {
+            this = Parse(s);
         }
         public static BigNum operator +(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a - b; }

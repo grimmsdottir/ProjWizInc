@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
@@ -24,8 +25,35 @@ namespace ProjWizInc.Core.ADT {
             _exp = 0;
             _isNegative = value >= 0;
         }
+        public BigNum(String s) {
+            this = Parse(s);
+        }
         public BigNum(int value) : this((long)value) { }
-        public BigNum(double value) : this((long)value) { }
+        public BigNum(double value) {
+            //this case is what if a long/int was casted to a double then passed in
+            //also i forgot that doubles go all to the way to 1.8e308, compared to long's 9.0e18
+            if (value % 1 == 0 && value <= long.MaxValue && value >= long.MinValue) { 
+                _small = (long)value;
+                _exp = 0;
+                _man = value;
+                _isLarge = false;
+                if (value > 0) {
+                    _isNegative = false;
+                } else {
+                    _isNegative = true;
+                }
+            } else {
+                //this case means it is a decimal/fractional or much bigger than a long
+                _isLarge = true;
+                _small = 0;
+                //holy math stack batman
+                //so first, we take the absolute value of value, because logs dont like negative numbers
+                //then we get the log10 of the value, which gives us basically the number of zeros in the value
+                //then we floor and long it, because we dont need all that other fractionals for an exponent
+                _exp = (long)Math.Floor(Math.Log10(Math.Abs(value)));
+                _man = value / Math.Pow(10, _exp);
+            }
+        }
         public BigNum(double man, long exp) {
             if (Math.Abs(man) < EPSILON || man == 0) {
                 this = new BigNum(0);
@@ -132,7 +160,10 @@ namespace ProjWizInc.Core.ADT {
             return new BigNum(long.Parse(s));
         }
         public override string ToString() {
-            if (!_isLarge) return _small.ToString("N0");
+            //todo: allow for variable string formating, like k,m,qd,qt etc 
+            if (!_isLarge) {
+                return _small.ToString();
+            }
             return $"{_man:F2}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums

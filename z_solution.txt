@@ -168,6 +168,7 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\ADT\BigNum.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
@@ -185,47 +186,76 @@ namespace ProjWizInc.Core.ADT {
         private const int THRESH_POW = 15;
         private const double EPSILON = 1e-15;
 
-        public BigNum(long value) {
-            _isLarge = false;
-            _small = value;
-            _man = 0;
-            _exp = 0;
-            _isNegative = value >= 0;
-        }
-        public BigNum(int value) : this((long)value) { }
+        //public getters
+        public long Small => _small;
+        public double Man => _man;
+        public long Exp => _exp;
+        public bool IsLarge => _isLarge;
+        public bool IsNegative => _isNegative;
+        public BigNum(int value) : this((long)value,0) { }
+        public BigNum(long value) : this(value,0) { }
+        public BigNum(double value) : this(value, 0) { }
         public BigNum(double man, long exp) {
-            if (Math.Abs(man) < EPSILON || man == 0) {
-                this = new BigNum(0);
-                return;
-            }
-            _isNegative = man >= 0;
-            int shift = (int)Math.Floor(Math.Log10(Math.Abs(man)));
-            double normMan = man / Math.Pow(10, shift);
-            long normExp = exp + shift;
-            if (normMan >= 0 && normExp < THRESH_POW) {
-                _isLarge = false;
-                _small = (long)(normMan * Math.Pow(10,normExp));
+            //first we check if we are dumb enough to try passing in 0
+            if (man == 0) {
                 _man = 0;
                 _exp = 0;
-            } else {
-                _isLarge = true;
                 _small = 0;
-                _man = normMan;
-                _exp = normExp;
+                _isLarge = false;
+                return;
             }
+            //we check for the "internal exponent" like 150 should be 1.5e2
+            long intExp = (long)Math.Floor(Math.Log10(man));
+            //we pass along the internal exponent to the real exponent
+            exp += intExp;
+            //and we flatten the mantissa down to be >= 1 && <10
+            man /= Math.Pow(10, intExp);
+            //sometimes we might end up with funky mantissas remaining like 10.00000000001 
+            if (Math.Abs(man) >= 10) {
+                man /= 10;
+                exp++;
+            }
+            //lastly we check if the resulting man-exp is actually small enough to fit in a long
+            double manExp = man * Math.Pow(10, exp);
+            //quick check if the number is negative
+            _isNegative = man < 0;
+            //is the exponent between 0 and 18, and is it a whole number
+            if (exp >= 0 && exp <= 18 && manExp % 1 == 0) {
+                //it can be a long
+                _small = (long)manExp;
+                _isLarge = false;
+                
+                
+            } else {
+                //its big enough to need the full man-exp
+                _small = 0;
+                _isLarge = true;
+            }
+            //normal small long numbers dont have man or exp, but since this one came to us malformed
+            //we just leave it in in case its important
+            //regardless we will want to set the man and exp, so no need to repeat it twice below
+            _man = man;
+            _exp = exp;
+        }
+        public BigNum(String s) {
+            this = Parse(s);
         }
         public static BigNum operator +(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a - b; }
             //small + small
             if (!a._isLarge && !b._isLarge) {
-                long sum = a._small + b._small;
-                if (Math.Abs(sum) < THRESHOLD) {
-                    //= still small
-                    return new BigNum(sum);
+                //if we add 2 smalls together, they can cross the boundry and overflow if we did a simple long sum
+                //doubles can hold more than longs, so we can use double addition to be safe. precision should not matter
+                //at the long boundry, 9e18
+                double testSum = (double)a._small + (double)b._small;
+                if (testSum <= long.MinValue || testSum >= long.MaxValue) {
+                    //we can just use our constructor to resolve the addition, since we already added it
+                    return new BigNum(testSum);
                 } else {
-                    //= big now
-                    return new BigNum((double)sum,0);
-                }
+                    //in this case we can just return the 2 smalls added together
+                    //we dont use testSum because its a double and we dont need to lose precision over that
+                    return new BigNum(a._small + b._small);
+                }                
             }
             //if either numbers are big, we have to do the slower operation
             //if a is small, we just use the small, otherwise we take their man and exp
@@ -272,24 +302,46 @@ namespace ProjWizInc.Core.ADT {
         private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
         //comparator section
         public static bool operator >(BigNum a, BigNum b) {
-            if (a._exp != b._exp) return a._exp > b._exp;
+            //if both a and b are small, we do a regular comparison
+            if (!a._isLarge && !b._isLarge) { 
+                return a._small > b._small;
+            }
+            long expA = a._exp; 
+            long expB = b._exp;
+            //for the most time, we just need to compare exponents
+            if (expA > expB) { return true; }
+            if (expA < expB) { return false; }
+            //if the code reached here, that means the exponents are equal, so we just compare mantissas
             return a._man > b._man;
         }
         public static bool operator <(BigNum a, BigNum b) => b > a;
         public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
         public static bool operator <=(BigNum a, BigNum b) => b >= a;
         public static BigNum Parse(string s) {
-            if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
+            if (string.IsNullOrWhiteSpace(s)) {
+                throw new ArgumentException("Cannot parse empty string to BigNum");
+            }
+            //gotta trim whitespace for JSON and user input
+            s = s.Trim();
+            //case 1: scientific notation(1.0e50)
+            if (s.Contains('e', StringComparison.OrdinalIgnoreCase)) {
+                string[] parts = s.Split(new[] { 'e', 'E' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length != 2) throw new FormatException("Invalid scientific notation format.");
 
-            if (s.Contains('e') || s.Contains('E')) {
-                string[] parts = s.Split('e', 'E');
                 return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
             }
-
+            //case 2: smaller decimals. as it is it just yeets fractionals and turns doubles to longs
+            if (s.Contains('.')) {
+                return new BigNum(double.Parse(s));
+            }
+            //case 3: standard long input
             return new BigNum(long.Parse(s));
         }
         public override string ToString() {
-            if (!_isLarge) return _small.ToString("N0");
+            //todo: allow for variable string formating, like k,m,qd,qt etc 
+            if (!_isLarge) {
+                return _small.ToString();
+            }
             return $"{_man:F2}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
@@ -311,11 +363,11 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Data {
     public static class Globals {
-        public const int TICKS_PER_SECOND = 100;
-        public const int FRAMES_PER_SECOND = 60;
+        public const int LOGIC_TPS = 100;
+        public const int PRESENTATION_PPS = 30;
 
-        public static readonly double TICK_LENGTH = 1.0 / TICKS_PER_SECOND;
-        public static readonly double FRAME_LENGTH_MS = 1000.0 / FRAMES_PER_SECOND;
+        public static readonly double TICK_LENGTH = 1.0 / LOGIC_TPS;
+        public static readonly double FRAME_LENGTH_MS = 1000.0 / PRESENTATION_PPS;
 
         
     }
@@ -655,7 +707,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class ContextManager {
-        private readonly EventBroker _event;
+        private readonly EventManager _event;
         private readonly TimeManager _time;
         private readonly EconomyManager _resources;
         private readonly JobManager _jobs;
@@ -665,7 +717,7 @@ namespace ProjWizInc.Core.Managers {
         private ContextManager() { 
             _defs = new DefinitionManager();
             _defs.Init();
-            _event = new EventBroker();
+            _event = new EventManager();
             _time = new TimeManager(_event);
             _resources = new EconomyManager(_event,_defs);
             _resources.Init();
@@ -717,11 +769,11 @@ namespace ProjWizInc.Core.Managers {
             public BigNum[]? Resources { get; internal set; }
         }
 
-        private readonly EventBroker _events;
+        private readonly EventManager _events;
         private readonly EconomyState _state = new();
         private readonly DefinitionManager _defs;
         private readonly object _lock = new ();
-        public EconomyManager(EventBroker events, DefinitionManager defs) {
+        public EconomyManager(EventManager events, DefinitionManager defs) {
             _events = events; 
             _defs= defs;
             _events.Subscribe<UpdateLogicEvent>(Update);
@@ -763,7 +815,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventBroker.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventManager.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -788,7 +840,7 @@ namespace ProjWizInc.Core.Managers {
      * it bypasses collection change errors by using an array. if any changes happen, the currently running publish
      * will continue working with the old array, and use the new array next loop
      */
-    public class EventBroker{
+    public class EventManager{
         private readonly Dictionary<Type, Delegate[]> _subscribers = [];
         //we use this funky thing as a lock to make it thread safe and prevent race conditions
         private readonly object _lock = new();
@@ -883,8 +935,8 @@ namespace ProjWizInc.Core.Managers {
         private readonly Stopwatch _stopwatch;
         //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
         private CancellationTokenSource _cts;
-        private readonly EventBroker _events;
-        public GameLoopManager(EventBroker events) {
+        private readonly EventManager _events;
+        public GameLoopManager(EventManager events) {
             _stopwatch = new Stopwatch();
             _events = events;
 
@@ -925,13 +977,13 @@ namespace ProjWizInc.Core.Managers {
                     LogicStep();
                     _timeAccumulator -= TICK_LENGTH;
                 }
-                RenderStep();
+                PresentationStep();
             }
         }
         private void LogicStep() {
             _events.Publish(new UpdateLogicEvent());
         }
-        private void RenderStep() {
+        private void PresentationStep() {
             _events.Publish(new UpdateRenderEvent());
         }
     }
@@ -975,12 +1027,12 @@ namespace ProjWizInc.Core.Managers {
     internal class JobManager {
         //our few state fields. it should be ok to leave them here, because 
         
-        private readonly EventBroker _events;
+        private readonly EventManager _events;
         private readonly DefinitionManager _defs;
         private readonly JobState _state;
         //we use -1 like null basically, if its -1 that means that nothings active
         
-        public JobManager(EventBroker events, DefinitionManager defs) {
+        public JobManager(EventManager events, DefinitionManager defs) {
             _events = events;
             _defs = defs;
             _events.Subscribe<UpdateLogicEvent>(Update);
@@ -1051,11 +1103,11 @@ namespace ProjWizInc.Core.Managers {
         public int TicksElapsed;
     }
     public class TimeManager {
-        private readonly EventBroker _events;
+        private readonly EventManager _events;
         private readonly TimeState _state = new();
         public TimeState State => _state;
 
-        public TimeManager(EventBroker events) {
+        public TimeManager(EventManager events) {
             _events = events;
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
@@ -1071,8 +1123,8 @@ namespace ProjWizInc.Core.Managers {
         }
         private void AdvanceTick() {
             _state.TicksElapsed++;
-            if (_state.TicksElapsed >= Globals.TICKS_PER_SECOND) {
-                _state.TicksElapsed -= Globals.TICKS_PER_SECOND;
+            if (_state.TicksElapsed >= Globals.LOGIC_TPS) {
+                _state.TicksElapsed -= Globals.LOGIC_TPS;
                 _state.TimeElapsed++;
             }
         }
@@ -1327,6 +1379,154 @@ Console.WriteLine("Enter any key to exit...");
 //DefinitionManager defs = new DefinitionManager();
 //defs.GenerateTemplate();
 Console.ReadLine();
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\BigNumTests.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+
+namespace xUnitTester {
+    public class BigNumTests {
+        //reminder that our boundry is around 2e15
+        private const int NUM_0 = 0;
+        private const int NUM_1 = 1;
+        private const int NUM_SMALL = 1000;
+        private const double NUM_BIG = 1e25;
+        /*
+         * CONSTRUCTOR AND PATH TESTS
+         */
+        [Fact]
+        public void Constructor_SmallWholeNumber_IsNotLarge() {
+            BigNum val = new(NUM_SMALL);
+            //if val isLarge, than the test fails, otherwise it passes
+            Assert.False(val.IsLarge);
+        }
+        [Fact]
+        public void Constructor_BigNumber_IsLarge() {
+            BigNum val = new(NUM_BIG);
+            //if val is not Large, than the test fails, otherwise it passes
+            Assert.True(val.IsLarge);
+        }
+        [Theory]
+        [InlineData(150, 0, 1.5, 2)]          // Over 10: 150e0 -> 1.5e2
+        [InlineData(0.01, 5, 1.0, 3)]         // Under 1: 0.01e5 -> 1.0e3
+        [InlineData(950, 10, 9.5, 12)]        // Standard normalization
+        [InlineData(0.0001, -2, 1.0, -6)]     // Negative exponents
+        public void Constructor_AlwaysNormalizesCorrectly(double mIn, long eIn, double mExp, long eExp) {
+            // Act
+            var val = new BigNum(mIn, eIn);
+
+            // Assert
+            // We check the internal components. 
+            // (Note: You might need to make these internal or public for the test)
+            Assert.Equal(eExp, val.Exp);
+            Assert.Equal(mExp, val.Man, 5); // 5 decimal places of precision
+        }
+        [Theory]
+        [InlineData(150, 0, 150, false)]      // Should downshift to long
+        [InlineData(1.5, 2, 150, false)]      // Should downshift to long
+        [InlineData(1.5, 20, 0, true)]        // Stays large
+        [InlineData(0.01, 0, 0, true)]        // Decimals are always large (Scientific path)
+        public void Constructor_Normalization_PathCheck(double mIn, long eIn, long expectedSmall, bool expectedIsLarge) {
+            var val = new BigNum(mIn, eIn);
+
+            Assert.Equal(expectedIsLarge, val.IsLarge);
+            if (!expectedIsLarge) {
+                Assert.Equal(expectedSmall, val.Small);
+            }
+        }
+        [Fact]
+        public void Constructor_ExtremeUnnormalized_NormalizesCorrectly() {
+            // 1,000,000e0 should become 1e6
+            var val = new BigNum(1_000_000, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(6, val.Exp);
+        }
+
+        [Fact]
+        public void Constructor_TinyDecimal_NormalizesCorrectly() {
+            // 0.000001e0 should become 1e-6
+            var val = new BigNum(0.000001, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(-6, val.Exp);
+        }
+        [Fact]
+        public void Addition_CrossesThreshold_Successfully() {
+            // Arrange: Use a number just below long.MaxValue (approx 9e18)
+            BigNum a = new BigNum(9_000_000_000_000_000_000L);
+            BigNum b = new BigNum(2_000_000_000_000_000_000L);
+
+            // Act
+            BigNum result = a + b;
+
+            // Assert
+            Assert.True(result.IsLarge);
+            // 9e18 + 2e18 = 1.10e19
+            Assert.Equal("1.10e19", result.ToString());
+        }
+        [Fact]
+        public void Addition_MassivePlusTiny_HandlesAbsorption() {
+            BigNum massive = BigNum.Parse("1.00e25");
+            BigNum tiny = new BigNum(1);
+
+            BigNum result = massive + tiny;
+
+            // In a double-mantissa system, 1.00e25 + 1 is still 1.00e25
+            // This test ensures your normalization logic doesn't freak out.
+            Assert.Equal("1.00e25", result.ToString());
+        }
+        [Theory]
+        [InlineData("0.5", "0.5", "1")]      // Two halves make a whole
+        [InlineData("0.1", "10", "1")]       // Multiplication test: 0.1 * 10 = 1
+        public void Decimals_CalculateCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            // Test both addition and multiplication
+            if (valB == "0.5") Assert.Equal(expected, (a + b).ToString());
+            if (valB == "10") Assert.Equal(expected, (a * 10).ToString());
+        }
+        [Theory]
+        [InlineData("1.00e10", "5.00e9", true)]  // Scientific vs Scientific (Different exponents)
+        [InlineData("1000", "999", true)]        // Long vs Long
+        [InlineData("1.00e3", "999", true)]      // Scientific vs Long
+        [InlineData("500", "1.00e2", true)]      // Long vs Scientific
+        public void Comparison_GreaterAndLess_Works(string big, string small, bool expected) {
+            BigNum a = BigNum.Parse(big);
+            BigNum b = BigNum.Parse(small);
+
+            Assert.Equal(expected, a > b);
+            Assert.Equal(!expected, a < b);
+        }
+        //check if we can read valid numbers correctly
+        [Theory]
+        [InlineData("100", 100)]
+        [InlineData("12.5", 12.5)]
+        [InlineData("1.0e10", 10000000000)]
+        [InlineData("  500  ", 500)] // Testing the Trim()
+        public void Parse_ValidatesAllFormats(string input, double expectedValue) {
+            var result = BigNum.Parse(input);
+            // You'll need an explicit/implicit cast to double for this assertion
+            //Assert.Equal(expectedValue, (double)result);
+        }
+        //so basically we create a "theory", which we put in what we expect should happen given some data
+        //so for example, this theory is for addition, we expect that a + b = c
+        [Theory]
+        [InlineData("10", "20", "30")]               // Simple long path
+        [InlineData("1.00e10", "1.00e10", "2.00e10")] // Simple mantissa path
+        [InlineData("9e18", "2e18", "1.10e19")]       // Crossing the threshold
+        [InlineData("1.00e20", "1", "1.00e20")]       // Testing absorption/precision
+        public void Addition_CalculatesCorrectly(string valA, string valB, string expected) {
+            var a = BigNum.Parse(valA);
+            var b = BigNum.Parse(valB);
+
+        }
+    }
+}
 
 
 

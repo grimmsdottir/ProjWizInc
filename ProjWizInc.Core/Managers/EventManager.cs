@@ -21,7 +21,7 @@ namespace ProjWizInc.Core.Managers {
      * it bypasses collection change errors by using an array. if any changes happen, the currently running publish
      * will continue working with the old array, and use the new array next loop
      */
-    public class EventBroker{
+    public class EventManager{
         private readonly Dictionary<Type, Delegate[]> _subscribers = [];
         //we use this funky thing as a lock to make it thread safe and prevent race conditions
         private readonly object _lock = new();

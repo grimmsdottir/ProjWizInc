@@ -20,11 +20,11 @@ namespace ProjWizInc.Core.Managers {
             public BigNum[]? Resources { get; internal set; }
         }
 
-        private readonly EventBroker _events;
+        private readonly EventManager _events;
         private readonly EconomyState _state = new();
         private readonly DefinitionManager _defs;
         private readonly object _lock = new ();
-        public EconomyManager(EventBroker events, DefinitionManager defs) {
+        public EconomyManager(EventManager events, DefinitionManager defs) {
             _events = events; 
             _defs= defs;
             _events.Subscribe<UpdateLogicEvent>(Update);

@@ -16,8 +16,8 @@ namespace ProjWizInc.Core.Managers {
         private readonly Stopwatch _stopwatch;
         //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
         private CancellationTokenSource _cts;
-        private readonly EventBroker _events;
-        public GameLoopManager(EventBroker events) {
+        private readonly EventManager _events;
+        public GameLoopManager(EventManager events) {
             _stopwatch = new Stopwatch();
             _events = events;
 
@@ -58,13 +58,13 @@ namespace ProjWizInc.Core.Managers {
                     LogicStep();
                     _timeAccumulator -= TICK_LENGTH;
                 }
-                RenderStep();
+                PresentationStep();
             }
         }
         private void LogicStep() {
             _events.Publish(new UpdateLogicEvent());
         }
-        private void RenderStep() {
+        private void PresentationStep() {
             _events.Publish(new UpdateRenderEvent());
         }
     }

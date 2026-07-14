@@ -111,14 +111,14 @@ namespace ProjWizInc.Core.ADT {
         public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
         public static bool operator <=(BigNum a, BigNum b) => b >= a;
         public static BigNum Parse(string s) {
-            if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
+            //if (string.IsNullOrWhiteSpace(s)) return new BigNum(0);
 
             if (s.Contains('e') || s.Contains('E')) {
                 string[] parts = s.Split('e', 'E');
                 return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
             }
-
             return new BigNum(long.Parse(s));
+            throw new FormatException($"String '{s}' was not in a recognized format for BigNum.");
         }
         public override string ToString() {
             if (!_isLarge) return _small.ToString("N0");

@@ -31,12 +31,12 @@ namespace ProjWizInc.Core.Managers {
     internal class JobManager {
         //our few state fields. it should be ok to leave them here, because 
         
-        private readonly EventBroker _events;
+        private readonly EventManager _events;
         private readonly DefinitionManager _defs;
         private readonly JobState _state;
         //we use -1 like null basically, if its -1 that means that nothings active
         
-        public JobManager(EventBroker events, DefinitionManager defs) {
+        public JobManager(EventManager events, DefinitionManager defs) {
             _events = events;
             _defs = defs;
             _events.Subscribe<UpdateLogicEvent>(Update);

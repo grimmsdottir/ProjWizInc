@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AvaloniaApplication1", "..\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Testertron", "..\Testertron\Testertron.csproj", "{383741E5-4CDA-414F-A02D-D7B0BF4B24DC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "xUnitTester", "..\xUnitTester\xUnitTester.csproj", "{707EDA2D-8688-47CC-86EA-985048BB218C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{383741E5-4CDA-414F-A02D-D7B0BF4B24DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{383741E5-4CDA-414F-A02D-D7B0BF4B24DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{383741E5-4CDA-414F-A02D-D7B0BF4B24DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{707EDA2D-8688-47CC-86EA-985048BB218C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{707EDA2D-8688-47CC-86EA-985048BB218C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{707EDA2D-8688-47CC-86EA-985048BB218C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{707EDA2D-8688-47CC-86EA-985048BB218C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

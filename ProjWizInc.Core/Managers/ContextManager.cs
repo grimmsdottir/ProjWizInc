@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class ContextManager {
-        private readonly EventBroker _event;
+        private readonly EventManager _event;
         private readonly TimeManager _time;
         private readonly EconomyManager _resources;
         private readonly JobManager _jobs;
@@ -17,7 +17,7 @@ namespace ProjWizInc.Core.Managers {
         private ContextManager() { 
             _defs = new DefinitionManager();
             _defs.Init();
-            _event = new EventBroker();
+            _event = new EventManager();
             _time = new TimeManager(_event);
             _resources = new EconomyManager(_event,_defs);
             _resources.Init();

@@ -1,9 +1,11 @@
 ﻿using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Components;
 using ProjWizInc.Core.Persistence;
 using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,7 +31,10 @@ namespace ProjWizInc.Core.Managers {
             TimeState timeState = gameState.timeState;
             //special managers that need to be initialised first
             EventManager eventManager = new EventManager();
-            DefinitionManager definitionManager = BuildDefinitionManager(serialiser);
+            //the definition manager is so special it gets its own section lol
+            GameDefinitions rawData = serialiser.Load<GameDefinitions>(DEFINITIONS_FILEPATH);
+            DefinitionManager definitionManager = BuildDefinitionManager(rawData);
+            ResolveDictionaryLinks(rawData, definitionManager);
             //construct basic managers
             EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
@@ -44,32 +49,50 @@ namespace ProjWizInc.Core.Managers {
                 timeManager
                 );
         }
-        //the definition manager is so chonky we split it out to here
-        private static DefinitionManager BuildDefinitionManager(SerialisationService serialiser) {
-            DefinitionManager definitionManager = new DefinitionManager();
-            //first we read the json and get the GameDefinitions
-            GameDefinitions rawData = serialiser.Load<GameDefinitions>(DEFINITIONS_FILEPATH);
-            //then we create our 2d dictionaries for the definition manager
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
-            Dictionary<Type, Array> typeIdDefMap = [];
-            //then we fill up the dicts
-            PopulateDictionaries<JobDefinition>(
-                rawData.Jobs,
-                typeKeyIdMap,
-                typeIdDefMap
-                );
-            PopulateDictionaries<ResourceDefinition>(
-                rawData.Resources,
-                typeKeyIdMap,
-                typeIdDefMap
-                );
-            //now the linking phase
+        private static void ResolveDictionaryLinks(GameDefinitions rawData, DefinitionManager definitionManager) {
             foreach (var job in rawData.Jobs) {
                 foreach (var comp in job.Components.OfType<ILinkableDefinitionInterface>()) {
-                    comp.ResolveLinks();
+                    comp.ResolveLinks(definitionManager);
                 }
             }
-            return null;
+        }
+        //the definition manager is so chonky we split it out to here
+        private static DefinitionManager BuildDefinitionManager(GameDefinitions rawData) {
+            //first we read the json and get the GameDefinitions
+            
+            //then we create the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //then we fill the dictionaries
+            PopulateAllDictionaries(rawData, typeKeyIdMap, typeIdDefMap);
+            //we arent done yet, because we havent resolved links, but its good enough
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+        //wizardly reflection something magic, idk
+        private static void PopulateAllDictionaries(
+            GameDefinitions data,
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            // We look at every property in GameDefinitions (Resources, Jobs, etc.)
+            var properties = typeof(GameDefinitions).GetProperties();
+
+            foreach (var prop in properties) {
+                // Check if the property is a List<T> where T inherits from DefinitionBase
+                if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
+                    var listValue = prop.GetValue(data);
+                    if (listValue == null) continue;
+
+                    // Get the specific type (e.g., ResourceDefinition)
+                    var itemType = prop.PropertyType.GetGenericArguments()[0];
+
+                    // Use 'MakeGenericMethod' to call your PopulateRegistry<T> method dynamically
+                    var method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                    var genericMethod = method.MakeGenericMethod(itemType);
+
+                    genericMethod.Invoke(null, new object[] { listValue, typeKeyIdMap, typeIdDefMap });
+                }
+            }
         }
         /* this hecking thing is the definition buildertron, which is so complex, imma write this down here so i remember
          * T - the type of definition, which will need to be hard coded, for each type of definition,

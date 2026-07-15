@@ -1,4 +1,5 @@
 ﻿using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
@@ -15,12 +16,12 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager BuildContext() {
             //read jsons
 
-
-
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
-            EconomyState economyState = new EconomyState();
-            JobState jobState = new JobState();
-            TimeState timeState = new TimeState();
+            GameState gameState = new GameState();
+            //now we slice up the GameState into slices to pass to the managers
+            EconomyState economyState = gameState.economyState;
+            JobState jobState = gameState.jobState;
+            TimeState timeState = gameState.timeState;
             //special managers that need to be initialised first
             EventManager eventManager = new EventManager();
             DefinitionManager definitionManager = new DefinitionManager();

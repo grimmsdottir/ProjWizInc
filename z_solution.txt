@@ -109,7 +109,7 @@ using ProjWizInc.Core.Managers;
 namespace AvaloniaApplication1.ViewModels {
     public partial class MainWindowViewModel : ViewModelBase {
         public string Greeting { get; } = "Welcome to Avalonia!";
-        private readonly ContextManager _context;
+        private readonly CoreContext _context;
         [ObservableProperty]
         private string _timeDisplay = "Time: 0";
         public MainWindowViewModel() {
@@ -143,7 +143,7 @@ using ProjWizInc.Core.Managers;
 
 namespace AvaloniaApplication1.Views {
     public partial class MainWindow : Window {
-        private readonly ContextManager _context;
+        private readonly CoreContext _context;
         public MainWindow() {
             
             InitializeComponent();
@@ -410,6 +410,7 @@ namespace ProjWizInc.Core.Data {
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\DefinitionManager.cs
 ==============================================================================
 using Microsoft.Win32;
+using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
@@ -474,7 +475,7 @@ namespace ProjWizInc.Core.Definitions {
             foreach (var idDefMap in _typeIdDefMap.Values) {
                 foreach (var def in idDefMap) {
                     if (def is DefinitionBase entity) {
-                        foreach(var feature in entity.Features.OfType<LinkableDefinitionInterface>()) {
+                        foreach(var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
                             feature.ResolveLinks(this);
                         }
                     }
@@ -544,7 +545,7 @@ namespace ProjWizInc.Core.Definitions {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\JobDefinition.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Blueprints\JobDefinition.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions.Common;
 using System;
@@ -562,7 +563,7 @@ namespace ProjWizInc.Core.Definitions {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\ResourceDefinition.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Blueprints\ResourceDefinition.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions.Common;
 using System;
@@ -571,7 +572,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions {
+namespace ProjWizInc.Core.Definitions.Blueprints {
     public class ResourceDefinition : DefinitionBase {
     }
 }
@@ -593,10 +594,10 @@ namespace ProjWizInc.Core.Definitions.Common {
         public string DisplayName { get; set; } = string.Empty;
         public int Id { get; set; } = -1;
         //holds our features
-        public List<IFeatureInterface> Features { get; set; } = [];
+        public List<IDefinitionComponentInterface> Components { get; set; } = [];
         // Helper method to quickly find a specific component
-        public T GetFeature<T>() where T : IFeatureInterface {
-            return Features.OfType<T>().FirstOrDefault();
+        public T GetComponent<T>() where T : IDefinitionComponentInterface {
+            return Components.OfType<T>().FirstOrDefault();
         }
     }
 }
@@ -604,7 +605,31 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\EntryInterface.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\IDefinitionComponentInterface.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Components;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    // This tells the Serializer: "When you see an IFeatureInterface, look for the $type field"
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    // This maps the string "payout" in JSON to the actual C# class PayoutFeature
+    [JsonDerivedType(typeof(PayoutComponent), "payout")]
+    [JsonDerivedType(typeof(RequiresTicksComponent), "ticks")]
+    public interface IDefinitionComponentInterface {
+        //we can add some fields here later like name or description for tooltips or flavor
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\IEntryInterface.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -620,31 +645,7 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\FeatureInterface.cs
-==============================================================================
-using ProjWizInc.Core.Definitions.Features;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Definitions.Common {
-    // This tells the Serializer: "When you see an IFeatureInterface, look for the $type field"
-    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-    // This maps the string "payout" in JSON to the actual C# class PayoutFeature
-    [JsonDerivedType(typeof(PayoutFeature), "payout")]
-    [JsonDerivedType(typeof(RequiresTicksFeature), "ticks")]
-    public interface IFeatureInterface {
-        //we can add some fields here later like name or description for tooltips or flavor
-    }
-}
-
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\LinkableDefinitionInterface.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\ILinkableDefinitionInterface.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -653,7 +654,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    public interface LinkableDefinitionInterface {
+    public interface ILinkableDefinitionInterface {
         void ResolveLinks(DefinitionManager manager);
     }
 }
@@ -661,25 +662,20 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features\PayoutFeature.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\PayoutComponent.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Entries;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
 using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
-    public class ResourcePayoutEntry : IEntryInterface {
-        public string ResourceKey {  get; set; }
-        public BigNum Amount { get; set; }
-        //we ignore resourceIDs because it is generated on bootup and not important
-        [JsonIgnore]
-        public int ResourceID { get; internal set; }
-        
-    }
-    public class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
+    
+    public class PayoutComponent : IDefinitionComponentInterface, ILinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
@@ -692,7 +688,7 @@ namespace ProjWizInc.Core.Definitions.Features {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Features\RequiresTicksFeature.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\RequiresTicksComponent.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
@@ -702,10 +698,35 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions.Features {
+namespace ProjWizInc.Core.Definitions.Components {
     
-    public class RequiresTicksFeature : IFeatureInterface {
+    public class RequiresTicksComponent : IDefinitionComponentInterface {
         public BigNum RequiredTicks { get; set; } = 1000;
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Entries\ResourcePayoutEntry.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Entries {
+    public class ResourcePayoutEntry : IEntryInterface {
+        public string ResourceKey { get; set; }
+        public BigNum Amount { get; set; }
+        //we ignore resourceIDs because it is generated on bootup and not important
+        [JsonIgnore]
+        public int ResourceID { get; internal set; }
+
     }
 }
 
@@ -737,6 +758,7 @@ namespace ProjWizInc.Core.Events {
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
@@ -753,12 +775,12 @@ namespace ProjWizInc.Core.Managers {
         public static ContextManager BuildContext() {
             //read jsons
 
-
-
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
-            EconomyState economyState = new EconomyState();
-            JobState jobState = new JobState();
-            TimeState timeState = new TimeState();
+            GameState gameState = new GameState();
+            //now we slice up the GameState into slices to pass to the managers
+            EconomyState economyState = gameState.economyState;
+            JobState jobState = gameState.jobState;
+            TimeState timeState = gameState.timeState;
             //special managers that need to be initialised first
             EventManager eventManager = new EventManager();
             DefinitionManager definitionManager = new DefinitionManager();
@@ -782,7 +804,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\CoreContext.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Common;
@@ -1094,7 +1116,9 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Features;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.Definitions.Components;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States.Managers;
 using System;
@@ -1135,9 +1159,9 @@ namespace ProjWizInc.Core.Managers {
             } else {
                 _state.ActiveJobID = jobId;
                 _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
-                _state.JobTicksRequired = _state.ActiveJobDef.GetFeature< RequiresTicksFeature>();
+                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent< RequiresTicksComponent>();
                 _state.Ticks = 0;
-                _state.JobPayout = _state.ActiveJobDef.GetFeature<PayoutFeature>();
+                _state.JobPayout = _state.ActiveJobDef.GetComponent<PayoutComponent>();
             }
         }
         public void Update(UpdateLogicEvent e) {
@@ -1297,6 +1321,7 @@ namespace ProjWizInc.Core.Persistence {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\GameState.cs
 ==============================================================================
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -1304,7 +1329,13 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.States {
-    internal class GameState {
+    /* 
+     * Despite how important GameState will be, it is ultimately just a box of boxes
+     */
+    public class GameState {
+        public EconomyState economyState { get; set; } = new();
+        public JobState jobState { get; set; } = new();
+        public TimeState timeState { get; set; } = new();
     }
 }
 
@@ -1334,8 +1365,8 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\Job
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Data;
-using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Features;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -1348,9 +1379,9 @@ namespace ProjWizInc.Core.States.Managers {
         //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
         public JobDefinition? ActiveJobDef { get; set; } = null;
         //we also keep a cache of any components and their state vars like ticks and xp
-        public RequiresTicksFeature? JobTicksRequired { get; set; } = null;
+        public RequiresTicksComponent? JobTicksRequired { get; set; } = null;
         public BigNum Ticks { get; set; } = 0;
-        public PayoutFeature? JobPayout { get; set; } = null;
+        public PayoutComponent? JobPayout { get; set; } = null;
         //a handy reset function for nulling everything
         public void Reset() {
             ActiveJobID = -1;

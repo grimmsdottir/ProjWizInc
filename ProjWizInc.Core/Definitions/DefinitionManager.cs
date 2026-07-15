@@ -12,11 +12,7 @@ using static ProjWizInc.Core.Definitions.GameDefinitions;
 
 namespace ProjWizInc.Core.Definitions {
 
-    public class GameDefinitions {
-        //our single source of truth for definitions, if we add any new definitions, it has to come here
-        public List<ResourceDefinition> Resources { get; set; } = [];
-        public List<JobDefinition> Jobs { get; set; } = [];
-    }
+    
     public class DefinitionManager {
         //now we use Type for keys. this first dictionary is a dictionary of dictionaries
         //each type has its own dictionary, which maps strings to int

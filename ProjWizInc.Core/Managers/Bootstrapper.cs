@@ -13,6 +13,10 @@ namespace ProjWizInc.Core.Managers {
      */
     public class Bootstrapper {
         public static ContextManager BuildContext() {
+            //read jsons
+
+
+
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
             EconomyState economyState = new EconomyState();
             JobState jobState = new JobState();

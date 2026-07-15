@@ -201,6 +201,16 @@ namespace ProjWizInc.Core.ADT {
             }
             return $"{_man:F2}e{_exp}";
         }
+        //this one always returns the full 
+        public string ToScientific(bool truncate) {
+            if (truncate) {
+                return $"{_man:F2}e{_exp}";
+            } else {
+                return $"{_man}e{_exp}";
+            }
+                
+
+        }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
         public static implicit operator BigNum(long v) => new BigNum(v);
         public static implicit operator BigNum(double v) => new BigNum(v, 0);

@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class ContextManager {
+    public class CoreContext {
         //our special managers
         private readonly EventManager _event;
         private readonly DefinitionManager _defs;
@@ -18,7 +18,7 @@ namespace ProjWizInc.Core.Managers {
         private readonly JobManager _jobs;
         private readonly TimeManager _time;
         //we arrange our managers alphabetically, and specials first
-        public ContextManager(
+        public CoreContext(
             DefinitionManager definitionManager,
             EventManager eventManager,
             EconomyManager economyManager,

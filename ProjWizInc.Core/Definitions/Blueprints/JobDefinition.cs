@@ -5,7 +5,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions {
-    public class ResourceDefinition : DefinitionBase {
+namespace ProjWizInc.Core.Definitions.Blueprints {
+    public class JobDefinition : DefinitionBase {
+        
     }
 }

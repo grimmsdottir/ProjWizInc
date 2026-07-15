@@ -6,7 +6,7 @@ using ProjWizInc.Core.Managers;
 namespace AvaloniaApplication1.ViewModels {
     public partial class MainWindowViewModel : ViewModelBase {
         public string Greeting { get; } = "Welcome to Avalonia!";
-        private readonly ContextManager _context;
+        private readonly CoreContext _context;
         [ObservableProperty]
         private string _timeDisplay = "Time: 0";
         public MainWindowViewModel() {

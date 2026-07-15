@@ -1,6 +1,8 @@
 ﻿using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Features;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.Definitions.Components;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States.Managers;
 using System;
@@ -41,9 +43,9 @@ namespace ProjWizInc.Core.Managers {
             } else {
                 _state.ActiveJobID = jobId;
                 _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
-                _state.JobTicksRequired = _state.ActiveJobDef.GetFeature< RequiresTicksFeature>();
+                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent< RequiresTicksComponent>();
                 _state.Ticks = 0;
-                _state.JobPayout = _state.ActiveJobDef.GetFeature<PayoutFeature>();
+                _state.JobPayout = _state.ActiveJobDef.GetComponent<PayoutComponent>();
             }
         }
         public void Update(UpdateLogicEvent e) {

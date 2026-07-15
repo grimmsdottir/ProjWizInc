@@ -1,4 +1,5 @@
 ﻿using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
 using System;
@@ -13,7 +14,7 @@ namespace ProjWizInc.Core.Managers {
      * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
      */
     public class Bootstrapper {
-        public static ContextManager BuildContext() {
+        public static CoreContext BuildContext() {
             //read jsons
 
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
@@ -30,7 +31,7 @@ namespace ProjWizInc.Core.Managers {
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
             TimeManager timeManager = new TimeManager(eventManager, timeState);
-            return new ContextManager(
+            return new CoreContext(
                 definitionManager,
                 eventManager,
                 economyManager,

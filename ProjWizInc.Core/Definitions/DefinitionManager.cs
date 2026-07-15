@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
@@ -63,7 +64,7 @@ namespace ProjWizInc.Core.Definitions {
             foreach (var idDefMap in _typeIdDefMap.Values) {
                 foreach (var def in idDefMap) {
                     if (def is DefinitionBase entity) {
-                        foreach(var feature in entity.Features.OfType<LinkableDefinitionInterface>()) {
+                        foreach(var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
                             feature.ResolveLinks(this);
                         }
                     }

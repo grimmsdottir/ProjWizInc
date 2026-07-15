@@ -6,9 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions.Features {
+namespace ProjWizInc.Core.Definitions.Components {
     
-    public class RequiresTicksFeature : IFeatureInterface {
+    public class RequiresTicksComponent : IDefinitionComponentInterface {
         public BigNum RequiredTicks { get; set; } = 1000;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,7 @@ namespace ProjWizInc.Core.Managers {
      * this class exists to create the ContextManager and all the other managers, so that we dont have
      * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
      */
-    public class Bootstraper {
+    public class Bootstrapper {
         public static ContextManager BuildContext() {
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
             EconomyState economyState = new EconomyState();

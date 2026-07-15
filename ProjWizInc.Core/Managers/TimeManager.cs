@@ -1,5 +1,6 @@
 ﻿using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
 using ProjWizInc.Core.States;
 using System;
 using System.Collections.Generic;
@@ -8,11 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class TimeState {
-        //TODO:use minutes/hours/days to store time, maybe its own ADT
-        public long TimeElapsed;
-        public int TicksElapsed;
-    }
+    
     public class TimeManager {
         private readonly EventManager _events;
         private readonly TimeState _state;

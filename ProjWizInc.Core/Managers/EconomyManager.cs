@@ -2,7 +2,7 @@
 using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Events;
-using ProjWizInc.Core.States;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,11 +12,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
 
-    public class EconomyState {
-
-        //changed the dictionary to using ints instead of strings for faster searching
-        public BigNum[]? Resources { get; set; }
-    }
+    
     public class EconomyManager{
         private readonly EventManager _events;
         private readonly EconomyState _state;

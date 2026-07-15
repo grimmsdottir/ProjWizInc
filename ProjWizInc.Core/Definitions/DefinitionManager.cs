@@ -22,22 +22,15 @@ namespace ProjWizInc.Core.Definitions {
         //but it should basically be like <Type,Type[]>
         //the int ids from the first dictionary map to the position in the defStore, for high performance
         private readonly Dictionary<Type, Array> _typeIdDefMap = [];
-
-
-        private const string RESOURCES_PATH = "resourceDefs.json";
-        public List<ResourceDefinition> Registry { get; private set; }
-        public DefinitionManager() { 
-            Registry = [];
+        internal DefinitionManager(
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            _typeKeyIdMap = typeKeyIdMap;
+            _typeIdDefMap = typeIdDefMap;
         }
+        /*
         public void Init() {
-            //read json as string
-            string jsonString = File.ReadAllText(RESOURCES_PATH);
-            //convert jsonString into a giant GameDefinitions object
-            var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
-            if (data == null) {
-                //throw some big ass exception
-                return;
-            }
             //same as the GameDefinitions, we gotta do this one manually
             RegisterDefinition(data.Resources);
             RegisterDefinition(data.Jobs);
@@ -64,13 +57,14 @@ namespace ProjWizInc.Core.Definitions {
             foreach (var idDefMap in _typeIdDefMap.Values) {
                 foreach (var def in idDefMap) {
                     if (def is DefinitionBase entity) {
-                        foreach(var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
+                        foreach (var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
                             feature.ResolveLinks(this);
                         }
                     }
                 }
             }
         }
+        */
         //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
             if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
@@ -90,24 +84,6 @@ namespace ProjWizInc.Core.Definitions {
                     "Make sure definitions are loaded before calling this.");
             }
             return _typeIdDefMap[typeof(T)].Length;
-        }
-        private string GetConfigPath(string fileName) {
-            //for when we are done done then we place this next to the .exe
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            return Path.Combine(baseDir, "Data", fileName);
-        }
-        public void GenerateTemplate() {
-            string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
-            string dataPath = Path.Combine(projectRoot, "Data", "defs.json");
-            //string path = GetConfigPath(RESOURCES_PATH);
-            if (!File.Exists(dataPath)) {
-                Directory.CreateDirectory(Path.GetDirectoryName(dataPath));
-            }
-            var template = new GameDefinitions();
-
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(template, options);
-            File.WriteAllText(dataPath, json);
         }
     }
 }

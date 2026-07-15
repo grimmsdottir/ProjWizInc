@@ -709,9 +709,10 @@ namespace ProjWizInc.Core.Events {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstraper.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -723,7 +724,7 @@ namespace ProjWizInc.Core.Managers {
      * this class exists to create the ContextManager and all the other managers, so that we dont have
      * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
      */
-    public class Bootstraper {
+    public class Bootstrapper {
         public static ContextManager BuildContext() {
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
             EconomyState economyState = new EconomyState();
@@ -756,6 +757,7 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextMan
 ==============================================================================
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -823,7 +825,7 @@ using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Events;
-using ProjWizInc.Core.States;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -833,11 +835,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
 
-    public class EconomyState {
-
-        //changed the dictionary to using ints instead of strings for faster searching
-        public BigNum[]? Resources { get; set; }
-    }
+    
     public class EconomyManager{
         private readonly EventManager _events;
         private readonly EconomyState _state;
@@ -1069,7 +1067,7 @@ using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Features;
 using ProjWizInc.Core.Events;
-using ProjWizInc.Core.States;
+using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -1078,23 +1076,7 @@ using System.Threading.Tasks;
 using static System.Reflection.Metadata.BlobBuilder;
 
 namespace ProjWizInc.Core.Managers {
-    public class JobState {
-        public int ActiveJobID { get; set; } = -1;
-        //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
-        public JobDefinition? ActiveJobDef { get; set; } = null;
-        //we also keep a cache of any components and their state vars like ticks and xp
-        public RequiresTicksFeature? JobTicksRequired { get; set; } = null;
-        public BigNum Ticks { get; set; } = 0;
-        public PayoutFeature? JobPayout { get; set; } = null;
-        //a handy reset function for nulling everything
-        public void Reset() {
-            ActiveJobID = -1;
-            ActiveJobDef = null;
-            JobTicksRequired = null;
-            Ticks = 0;
-            JobPayout = null;
-        }
-    }
+    
     public class JobManager {
         private readonly EventManager _events;
         private readonly JobState _state;
@@ -1159,6 +1141,7 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManage
 ==============================================================================
 using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
 using ProjWizInc.Core.States;
 using System;
 using System.Collections.Generic;
@@ -1167,11 +1150,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class TimeState {
-        //TODO:use minutes/hours/days to store time, maybe its own ADT
-        public long TimeElapsed;
-        public int TicksElapsed;
-    }
+    
     public class TimeManager {
         private readonly EventManager _events;
         private readonly TimeState _state;
@@ -1203,16 +1182,74 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\JobState.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\EconomyState.cs
 ==============================================================================
-using ProjWizInc.Core.Data;
+using ProjWizInc.Core.ADT;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.States {
+namespace ProjWizInc.Core.States.Managers {
+    public class EconomyState {
+        //changed the dictionary to using ints instead of strings for faster searching
+        public BigNum[]? Resources { get; set; }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\JobState.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Features;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class JobState {
+        public int ActiveJobID { get; set; } = -1;
+        //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
+        public JobDefinition? ActiveJobDef { get; set; } = null;
+        //we also keep a cache of any components and their state vars like ticks and xp
+        public RequiresTicksFeature? JobTicksRequired { get; set; } = null;
+        public BigNum Ticks { get; set; } = 0;
+        public PayoutFeature? JobPayout { get; set; } = null;
+        //a handy reset function for nulling everything
+        public void Reset() {
+            ActiveJobID = -1;
+            ActiveJobDef = null;
+            JobTicksRequired = null;
+            Ticks = 0;
+            JobPayout = null;
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\TimeState.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class TimeState {
+        //TODO:use minutes/hours/days to store time, maybe its own ADT
+        public long TimeElapsed;
+        public int TicksElapsed;
+    }
 }
 
 

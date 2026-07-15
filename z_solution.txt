@@ -21,7 +21,6 @@ namespace AvaloniaApplication1 {
                 desktop.MainWindow = new MainWindow {
                     DataContext = new MainWindowViewModel(),
                 };
-                ProjWizInc.Core.Managers.ContextManager.Instance.Start();
             }
 
             base.OnFrameworkInitializationCompleted();
@@ -115,18 +114,9 @@ namespace AvaloniaApplication1.ViewModels {
         private string _timeDisplay = "Time: 0";
         public MainWindowViewModel() {
             if (Avalonia.Controls.Design.IsDesignMode) return;
-
-            ContextManager.Instance.Subscribe<UpdateRenderEvent>(OnRenderPulse);
         }
         private void OnRenderPulse(UpdateRenderEvent e) {
-            // Polling the core logic
-            var time = ContextManager.Instance.GetTimeState().TimeElapsed;
 
-            // Marshaling back to the UI thread
-            Dispatcher.UIThread.Post(() =>
-            {
-                TimeDisplay = $"Time: {time}";
-            });
         }
     }
 }
@@ -176,7 +166,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.ADT {
     public readonly record struct BigNum {
-        private readonly long _small;
+        private readonly double _small;
         private readonly double _man;
         private readonly long _exp;
         private readonly bool _isLarge;
@@ -187,12 +177,12 @@ namespace ProjWizInc.Core.ADT {
         private const double EPSILON = 1e-15;
 
         //public getters
-        public long Small => _small;
+        public double Small => _small;
         public double Man => _man;
         public long Exp => _exp;
         public bool IsLarge => _isLarge;
         public bool IsNegative => _isNegative;
-        public BigNum(int value) : this((long)value,0) { }
+        public BigNum(int value) : this((double)value,0) { }
         public BigNum(long value) : this(value,0) { }
         public BigNum(double value) : this(value, 0) { }
         public BigNum(double man, long exp) {
@@ -215,23 +205,21 @@ namespace ProjWizInc.Core.ADT {
                 man /= 10;
                 exp++;
             }
+            //we dont need the funky old check, we can just check if the double is less than the threshold
             //lastly we check if the resulting man-exp is actually small enough to fit in a long
             double manExp = man * Math.Pow(10, exp);
             //quick check if the number is negative
             _isNegative = man < 0;
-            //is the exponent between 0 and 18, and is it a whole number
-            if (exp >= 0 && exp <= 18 && manExp % 1 == 0) {
-                //it can be a long
-                _small = (long)manExp;
+            if (manExp < THRESHOLD) {
+                //it can be a double
+                _small = manExp;
                 _isLarge = false;
-                
-                
             } else {
                 //its big enough to need the full man-exp
                 _small = 0;
                 _isLarge = true;
             }
-            //normal small long numbers dont have man or exp, but since this one came to us malformed
+            //normal small long numbers dont need man or exp, but since this one came to us malformed
             //we just leave it in in case its important
             //regardless we will want to set the man and exp, so no need to repeat it twice below
             _man = man;
@@ -314,9 +302,36 @@ namespace ProjWizInc.Core.ADT {
             //if the code reached here, that means the exponents are equal, so we just compare mantissas
             return a._man > b._man;
         }
-        public static bool operator <(BigNum a, BigNum b) => b > a;
-        public static bool operator >=(BigNum a, BigNum b) => a > b || a == b;
-        public static bool operator <=(BigNum a, BigNum b) => b >= a;
+        public static bool operator <(BigNum a, BigNum b) {
+            return !(a > b) && !(a==b);
+        
+        }
+        public static bool operator >=(BigNum a, BigNum b) {
+           return (a > b) && (a == b);
+        }
+        public static bool operator <=(BigNum a, BigNum b) {
+            return (a < b) && (a == b);
+        }
+        /*
+         * because BigNum is a struct, it uses Equals to operate ==, so this is not used
+        public static bool operator ==(BigNum a, BigNum b) {}
+        */
+        public bool Equals(BigNum other) {
+            //if one is bigly, and the other isnt, its clearly not the same already
+            if (IsLarge != other.IsLarge) { return false; }
+            //if they are both small numbers, we minus the two of them and if the difference is less than
+            //the epsilon, its good enough to be equal
+            if (!IsLarge) {
+                return Math.Abs(Small - other.Small) < EPSILON;
+            }
+            //otherwise they are both big numbers
+            if (_exp == other._exp) {
+                return Math.Abs(_man - other._man) < EPSILON;
+            }
+            return false;
+        }
+        //this also apparently important?
+        public override int GetHashCode() => HashCode.Combine(_small, _man, _exp, _isLarge);
         public static BigNum Parse(string s) {
             if (string.IsNullOrWhiteSpace(s)) {
                 throw new ArgumentException("Cannot parse empty string to BigNum");
@@ -397,13 +412,13 @@ using System.Threading.Tasks;
 using static ProjWizInc.Core.Definitions.GameDefinitions;
 
 namespace ProjWizInc.Core.Definitions {
-    
-    internal class GameDefinitions {
+
+    public class GameDefinitions {
         //our single source of truth for definitions, if we add any new definitions, it has to come here
-        public List<ResourceDefinition> Resources { get; internal set; } = [];
-        public List<JobDefinition> Jobs { get; internal set; } = [];
+        public List<ResourceDefinition> Resources { get; set; } = [];
+        public List<JobDefinition> Jobs { get; set; } = [];
     }
-    internal class DefinitionManager {
+    public class DefinitionManager {
         //now we use Type for keys. this first dictionary is a dictionary of dictionaries
         //each type has its own dictionary, which maps strings to int
         private readonly Dictionary<Type, Dictionary<string, int>> _typeKeyIdMap = [];
@@ -466,7 +481,7 @@ namespace ProjWizInc.Core.Definitions {
                 var typedArray = (T[])array;
                 return typedArray[id];
             }
-            return null;
+            throw new ArgumentException("Attempted to get definition of "+typeof(T)+", which does not exist");
         }
         //primarily used by defs for linking
         public int GetID<T>(string key) where T:DefinitionBase{
@@ -514,7 +529,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
-    internal class JobDefinition : DefinitionBase {
+    public class JobDefinition : DefinitionBase {
         
     }
 }
@@ -532,9 +547,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
-    internal class ResourceDefinition : DefinitionBase {
-        public ResourceDefinition() {
-        }
+    public class ResourceDefinition : DefinitionBase {
     }
 }
 
@@ -550,12 +563,12 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    internal class DefinitionBase {
-        public string Key { get; internal set; } = string.Empty;
-        public string DisplayName { get; internal set; } = string.Empty;
-        public int Id { get; internal set; } = -1;
+    public class DefinitionBase {
+        public string Key { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public int Id { get; set; } = -1;
         //holds our features
-        public List<IFeatureInterface> Features { get; internal set; } = [];
+        public List<IFeatureInterface> Features { get; set; } = [];
         // Helper method to quickly find a specific component
         public T GetFeature<T>() where T : IFeatureInterface {
             return Features.OfType<T>().FirstOrDefault();
@@ -615,7 +628,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    internal interface LinkableDefinitionInterface {
+    public interface LinkableDefinitionInterface {
         void ResolveLinks(DefinitionManager manager);
     }
 }
@@ -633,7 +646,7 @@ using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
-    internal class ResourcePayoutEntry : IEntryInterface {
+    public class ResourcePayoutEntry : IEntryInterface {
         public string ResourceKey {  get; set; }
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
@@ -641,7 +654,7 @@ namespace ProjWizInc.Core.Definitions.Features {
         public int ResourceID { get; internal set; }
         
     }
-    internal class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
+    public class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {
@@ -696,7 +709,7 @@ namespace ProjWizInc.Core.Events {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstraper.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
 using System;
@@ -706,23 +719,75 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
+    /*
+     * this class exists to create the ContextManager and all the other managers, so that we dont have
+     * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
+     */
+    public class Bootstraper {
+        public static ContextManager BuildContext() {
+            //TODO: for now we just make a new state each time, but later on we should try to load a save file
+            EconomyState economyState = new EconomyState();
+            JobState jobState = new JobState();
+            TimeState timeState = new TimeState();
+            //special managers that need to be initialised first
+            EventManager eventManager = new EventManager();
+            DefinitionManager definitionManager = new DefinitionManager();
+            //construct basic managers
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
+            GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
+            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+            return new ContextManager(
+                definitionManager,
+                eventManager,
+                economyManager,
+                gameLoopManager,
+                jobManager,
+                timeManager
+                );
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\ContextManager.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
     public class ContextManager {
+        //our special managers
         private readonly EventManager _event;
-        private readonly TimeManager _time;
-        private readonly EconomyManager _resources;
-        private readonly JobManager _jobs;
-        private readonly GameLoopManager _gameLoop;
         private readonly DefinitionManager _defs;
-        public static ContextManager Instance { get; } = new ContextManager();
-        private ContextManager() { 
-            _defs = new DefinitionManager();
-            _defs.Init();
-            _event = new EventManager();
-            _time = new TimeManager(_event);
-            _resources = new EconomyManager(_event,_defs);
-            _resources.Init();
-            _jobs = new JobManager(_event, _defs);
-            _gameLoop = new GameLoopManager(_event);
+        //our normal managers
+        private readonly EconomyManager _economy;
+        private readonly GameLoopManager _gameLoop;
+        private readonly JobManager _jobs;
+        private readonly TimeManager _time;
+        //we arrange our managers alphabetically, and specials first
+        public ContextManager(
+            DefinitionManager definitionManager,
+            EventManager eventManager,
+            EconomyManager economyManager,
+            GameLoopManager gameLoopManager,
+            JobManager jobManager,
+            TimeManager timeManger
+            ) {
+
+            _defs = definitionManager; 
+            _event = eventManager;
+            _economy = economyManager;
+            _gameLoop = gameLoopManager;
+            _jobs = jobManager;
+            _time = timeManger;
         }
         public void Start() {
             _gameLoop.Start();
@@ -735,6 +800,13 @@ namespace ProjWizInc.Core.Managers {
         }
         public void Publish<T>(T eventArgs) {
             _event.Publish(eventArgs);
+        }
+        internal T GetDefinition<T>(int id) where T : DefinitionBase {
+            return _defs.GetDefinition<T>(id);
+        }
+        internal int GetDefinitionCount<T>() where T : DefinitionBase {
+            // Simply forward the request to the actual manager
+            return _defs.GetDefCount<T>();
         }
         public TimeState GetTimeState() {
             return _time.State;
@@ -761,26 +833,25 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
 
-    
-    internal class EconomyManager{
-        public class EconomyState {
+    public class EconomyState {
 
-            //changed the dictionary to using ints instead of strings for faster searching
-            public BigNum[]? Resources { get; internal set; }
-        }
-
+        //changed the dictionary to using ints instead of strings for faster searching
+        public BigNum[]? Resources { get; set; }
+    }
+    public class EconomyManager{
         private readonly EventManager _events;
-        private readonly EconomyState _state = new();
-        private readonly DefinitionManager _defs;
+        private readonly EconomyState _state;
         private readonly object _lock = new ();
-        public EconomyManager(EventManager events, DefinitionManager defs) {
-            _events = events; 
-            _defs= defs;
+        private readonly int _resourceCount;
+        public EconomyManager(EventManager events, EconomyState state, int resourceCount) {
+            _state = state; ;
+            _events = events;
+            _resourceCount = resourceCount;
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public EconomyState State => _state;
         public void Init() {
-            _state.Resources = new BigNum[_defs.GetDefCount<ResourceDefinition>()];
+            _state.Resources = new BigNum[_resourceCount];
             _events.Subscribe<ResourceGainedEvent>(AddResource);
         }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
@@ -1007,14 +1078,14 @@ using System.Threading.Tasks;
 using static System.Reflection.Metadata.BlobBuilder;
 
 namespace ProjWizInc.Core.Managers {
-    internal class JobState {
-        public int ActiveJobID { get; internal set; } = -1;
+    public class JobState {
+        public int ActiveJobID { get; set; } = -1;
         //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
-        public JobDefinition? ActiveJobDef { get; internal set; } = null;
+        public JobDefinition? ActiveJobDef { get; set; } = null;
         //we also keep a cache of any components and their state vars like ticks and xp
-        public RequiresTicksFeature? JobTicksRequired { get; internal set; } = null;
-        public BigNum Ticks { get; internal set; } = 0;
-        public PayoutFeature? JobPayout { get; internal set; } = null;
+        public RequiresTicksFeature? JobTicksRequired { get; set; } = null;
+        public BigNum Ticks { get; set; } = 0;
+        public PayoutFeature? JobPayout { get; set; } = null;
         //a handy reset function for nulling everything
         public void Reset() {
             ActiveJobID = -1;
@@ -1024,19 +1095,18 @@ namespace ProjWizInc.Core.Managers {
             JobPayout = null;
         }
     }
-    internal class JobManager {
-        //our few state fields. it should be ok to leave them here, because 
-        
+    public class JobManager {
         private readonly EventManager _events;
-        private readonly DefinitionManager _defs;
         private readonly JobState _state;
+        private readonly DefinitionManager _defs;
         //we use -1 like null basically, if its -1 that means that nothings active
         
-        public JobManager(EventManager events, DefinitionManager defs) {
+        public JobManager(EventManager events, JobState state, DefinitionManager definitionManager) {
             _events = events;
-            _defs = defs;
+            _defs = definitionManager;
+            _state = state;
             _events.Subscribe<UpdateLogicEvent>(Update);
-        }
+        } 
         public void ToggleJob(int jobId) {
             //basically if we click the current job, it just stops it, but if we click something else, we 
             //move to that one instead
@@ -1098,20 +1168,19 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class TimeState {
-        //we will use minutes/hours/days to store time, probably its own ADT
+        //TODO:use minutes/hours/days to store time, maybe its own ADT
         public long TimeElapsed;
         public int TicksElapsed;
     }
     public class TimeManager {
         private readonly EventManager _events;
-        private readonly TimeState _state = new();
+        private readonly TimeState _state;
         public TimeState State => _state;
 
-        public TimeManager(EventManager events) {
+        public TimeManager(EventManager events, TimeState timeState) {
             _events = events;
+            _state = timeState;
             _events.Subscribe<UpdateLogicEvent>(Update);
-        }
-        public void Init() {
         }
         public long GetTime() {
             return _state.TimeElapsed;
@@ -1144,42 +1213,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.States {
-    public class JobState {
-        public string Id { get; private set; }
-        public ResourceType RewardType { get; private set; }
-        public int Progress { get; set; }
-        public int TicksRequired {  get; private set; }
-        public long Payout {  get; private set; }
-        public JobState(string id, ResourceType rewardType, int ticksRequired, long payout   ) {
-            Id = id;
-            RewardType = rewardType;
-            TicksRequired = ticksRequired;
-            Payout = payout;
-        }
-
-    }
-}
-
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\MainGameState.cs
-==============================================================================
-using ProjWizInc.Core.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.States {
-    public class MainGameState {
-        public static MainGameState Instance { get; } = new MainGameState() {};
-        private MainGameState() { }
-        
-
-    }
-    
 }
 
 
@@ -1425,16 +1458,19 @@ namespace xUnitTester {
             Assert.Equal(mExp, val.Man, 5); // 5 decimal places of precision
         }
         [Theory]
-        [InlineData(150, 0, 150, false)]      // Should downshift to long
-        [InlineData(1.5, 2, 150, false)]      // Should downshift to long
-        [InlineData(1.5, 20, 0, true)]        // Stays large
-        [InlineData(0.01, 0, 0, true)]        // Decimals are always large (Scientific path)
-        public void Constructor_Normalization_PathCheck(double mIn, long eIn, long expectedSmall, bool expectedIsLarge) {
+        [InlineData(150, 0, 150.0, false)]     // Integer -> Small Path
+        [InlineData(1.5, 2, 150.0, false)]     // Scientific (Small) -> Small Path
+        [InlineData(1.5, 20, 0.0, true)]       // Scientific (Huge) -> Large Path
+        [InlineData(0.01, 0, 0.01, false)]     // Decimal -> NOW Small Path (Previously Large)
+        [InlineData(1.23, -2, 0.0123, false)]  // Negative Exp -> NOW Small Path
+        public void Constructor_Normalization_PathCheck(double mIn, long eIn, double expectedSmall, bool expectedIsLarge) {
             var val = new BigNum(mIn, eIn);
 
             Assert.Equal(expectedIsLarge, val.IsLarge);
+
             if (!expectedIsLarge) {
-                Assert.Equal(expectedSmall, val.Small);
+                // Use precision: 15 to handle tiny floating point jitter
+                Assert.Equal(expectedSmall, val.Small, 15);
             }
         }
         [Fact]

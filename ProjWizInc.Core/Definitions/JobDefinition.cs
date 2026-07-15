@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
-    internal class JobDefinition : DefinitionBase {
+    public class JobDefinition : DefinitionBase {
         
     }
 }

@@ -18,7 +18,6 @@ namespace AvaloniaApplication1 {
                 desktop.MainWindow = new MainWindow {
                     DataContext = new MainWindowViewModel(),
                 };
-                ProjWizInc.Core.Managers.ContextManager.Instance.Start();
             }
 
             base.OnFrameworkInitializationCompleted();

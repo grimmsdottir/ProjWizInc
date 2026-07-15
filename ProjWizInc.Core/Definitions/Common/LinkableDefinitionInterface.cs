@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Common {
-    internal interface LinkableDefinitionInterface {
+    public interface LinkableDefinitionInterface {
         void ResolveLinks(DefinitionManager manager);
     }
 }

@@ -9,20 +9,19 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class TimeState {
-        //we will use minutes/hours/days to store time, probably its own ADT
+        //TODO:use minutes/hours/days to store time, maybe its own ADT
         public long TimeElapsed;
         public int TicksElapsed;
     }
     public class TimeManager {
         private readonly EventManager _events;
-        private readonly TimeState _state = new();
+        private readonly TimeState _state;
         public TimeState State => _state;
 
-        public TimeManager(EventManager events) {
+        public TimeManager(EventManager events, TimeState timeState) {
             _events = events;
+            _state = timeState;
             _events.Subscribe<UpdateLogicEvent>(Update);
-        }
-        public void Init() {
         }
         public long GetTime() {
             return _state.TimeElapsed;

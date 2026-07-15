@@ -11,13 +11,13 @@ using System.Threading.Tasks;
 using static ProjWizInc.Core.Definitions.GameDefinitions;
 
 namespace ProjWizInc.Core.Definitions {
-    
-    internal class GameDefinitions {
+
+    public class GameDefinitions {
         //our single source of truth for definitions, if we add any new definitions, it has to come here
-        public List<ResourceDefinition> Resources { get; internal set; } = [];
-        public List<JobDefinition> Jobs { get; internal set; } = [];
+        public List<ResourceDefinition> Resources { get; set; } = [];
+        public List<JobDefinition> Jobs { get; set; } = [];
     }
-    internal class DefinitionManager {
+    public class DefinitionManager {
         //now we use Type for keys. this first dictionary is a dictionary of dictionaries
         //each type has its own dictionary, which maps strings to int
         private readonly Dictionary<Type, Dictionary<string, int>> _typeKeyIdMap = [];
@@ -80,7 +80,7 @@ namespace ProjWizInc.Core.Definitions {
                 var typedArray = (T[])array;
                 return typedArray[id];
             }
-            return null;
+            throw new ArgumentException("Attempted to get definition of "+typeof(T)+", which does not exist");
         }
         //primarily used by defs for linking
         public int GetID<T>(string key) where T:DefinitionBase{

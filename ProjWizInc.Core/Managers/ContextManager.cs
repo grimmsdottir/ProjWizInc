@@ -1,4 +1,5 @@
 ﻿using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,22 +8,30 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
     public class ContextManager {
+        //our special managers
         private readonly EventManager _event;
-        private readonly TimeManager _time;
-        private readonly EconomyManager _resources;
-        private readonly JobManager _jobs;
-        private readonly GameLoopManager _gameLoop;
         private readonly DefinitionManager _defs;
-        public static ContextManager Instance { get; } = new ContextManager();
-        private ContextManager() { 
-            _defs = new DefinitionManager();
-            _defs.Init();
-            _event = new EventManager();
-            _time = new TimeManager(_event);
-            _resources = new EconomyManager(_event,_defs);
-            _resources.Init();
-            _jobs = new JobManager(_event, _defs);
-            _gameLoop = new GameLoopManager(_event);
+        //our normal managers
+        private readonly EconomyManager _economy;
+        private readonly GameLoopManager _gameLoop;
+        private readonly JobManager _jobs;
+        private readonly TimeManager _time;
+        //we arrange our managers alphabetically, and specials first
+        public ContextManager(
+            DefinitionManager definitionManager,
+            EventManager eventManager,
+            EconomyManager economyManager,
+            GameLoopManager gameLoopManager,
+            JobManager jobManager,
+            TimeManager timeManger
+            ) {
+
+            _defs = definitionManager; 
+            _event = eventManager;
+            _economy = economyManager;
+            _gameLoop = gameLoopManager;
+            _jobs = jobManager;
+            _time = timeManger;
         }
         public void Start() {
             _gameLoop.Start();
@@ -35,6 +44,13 @@ namespace ProjWizInc.Core.Managers {
         }
         public void Publish<T>(T eventArgs) {
             _event.Publish(eventArgs);
+        }
+        internal T GetDefinition<T>(int id) where T : DefinitionBase {
+            return _defs.GetDefinition<T>(id);
+        }
+        internal int GetDefinitionCount<T>() where T : DefinitionBase {
+            // Simply forward the request to the actual manager
+            return _defs.GetDefCount<T>();
         }
         public TimeState GetTimeState() {
             return _time.State;

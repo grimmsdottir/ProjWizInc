@@ -6,8 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions {
-    internal class ResourceDefinition : DefinitionBase {
-        public ResourceDefinition() {
-        }
+    public class ResourceDefinition : DefinitionBase {
     }
 }

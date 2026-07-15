@@ -11,18 +11,9 @@ namespace AvaloniaApplication1.ViewModels {
         private string _timeDisplay = "Time: 0";
         public MainWindowViewModel() {
             if (Avalonia.Controls.Design.IsDesignMode) return;
-
-            ContextManager.Instance.Subscribe<UpdateRenderEvent>(OnRenderPulse);
         }
         private void OnRenderPulse(UpdateRenderEvent e) {
-            // Polling the core logic
-            var time = ContextManager.Instance.GetTimeState().TimeElapsed;
 
-            // Marshaling back to the UI thread
-            Dispatcher.UIThread.Post(() =>
-            {
-                TimeDisplay = $"Time: {time}";
-            });
         }
     }
 }

@@ -12,26 +12,25 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
 
-    
-    internal class EconomyManager{
-        public class EconomyState {
+    public class EconomyState {
 
-            //changed the dictionary to using ints instead of strings for faster searching
-            public BigNum[]? Resources { get; internal set; }
-        }
-
+        //changed the dictionary to using ints instead of strings for faster searching
+        public BigNum[]? Resources { get; set; }
+    }
+    public class EconomyManager{
         private readonly EventManager _events;
-        private readonly EconomyState _state = new();
-        private readonly DefinitionManager _defs;
+        private readonly EconomyState _state;
         private readonly object _lock = new ();
-        public EconomyManager(EventManager events, DefinitionManager defs) {
-            _events = events; 
-            _defs= defs;
+        private readonly int _resourceCount;
+        public EconomyManager(EventManager events, EconomyState state, int resourceCount) {
+            _state = state; ;
+            _events = events;
+            _resourceCount = resourceCount;
             _events.Subscribe<UpdateLogicEvent>(Update);
         }
         public EconomyState State => _state;
         public void Init() {
-            _state.Resources = new BigNum[_defs.GetDefCount<ResourceDefinition>()];
+            _state.Resources = new BigNum[_resourceCount];
             _events.Subscribe<ResourceGainedEvent>(AddResource);
         }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons

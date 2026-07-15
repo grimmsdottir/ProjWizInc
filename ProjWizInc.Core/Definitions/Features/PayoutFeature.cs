@@ -6,7 +6,7 @@ using System.Resources;
 using System.Text.Json.Serialization;
 
 namespace ProjWizInc.Core.Definitions.Features {
-    internal class ResourcePayoutEntry : IEntryInterface {
+    public class ResourcePayoutEntry : IEntryInterface {
         public string ResourceKey {  get; set; }
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
@@ -14,7 +14,7 @@ namespace ProjWizInc.Core.Definitions.Features {
         public int ResourceID { get; internal set; }
         
     }
-    internal class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
+    public class PayoutFeature : IFeatureInterface, LinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
             foreach (ResourcePayoutEntry entry in PayoutEntries) {

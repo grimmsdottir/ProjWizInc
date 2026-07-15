@@ -38,16 +38,19 @@ namespace xUnitTester {
             Assert.Equal(mExp, val.Man, 5); // 5 decimal places of precision
         }
         [Theory]
-        [InlineData(150, 0, 150, false)]      // Should downshift to long
-        [InlineData(1.5, 2, 150, false)]      // Should downshift to long
-        [InlineData(1.5, 20, 0, true)]        // Stays large
-        [InlineData(0.01, 0, 0, true)]        // Decimals are always large (Scientific path)
-        public void Constructor_Normalization_PathCheck(double mIn, long eIn, long expectedSmall, bool expectedIsLarge) {
+        [InlineData(150, 0, 150.0, false)]     // Integer -> Small Path
+        [InlineData(1.5, 2, 150.0, false)]     // Scientific (Small) -> Small Path
+        [InlineData(1.5, 20, 0.0, true)]       // Scientific (Huge) -> Large Path
+        [InlineData(0.01, 0, 0.01, false)]     // Decimal -> NOW Small Path (Previously Large)
+        [InlineData(1.23, -2, 0.0123, false)]  // Negative Exp -> NOW Small Path
+        public void Constructor_Normalization_PathCheck(double mIn, long eIn, double expectedSmall, bool expectedIsLarge) {
             var val = new BigNum(mIn, eIn);
 
             Assert.Equal(expectedIsLarge, val.IsLarge);
+
             if (!expectedIsLarge) {
-                Assert.Equal(expectedSmall, val.Small);
+                // Use precision: 15 to handle tiny floating point jitter
+                Assert.Equal(expectedSmall, val.Small, 15);
             }
         }
         [Fact]

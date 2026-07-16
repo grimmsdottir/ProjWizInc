@@ -68,7 +68,12 @@ namespace ProjWizInc.Core.ADT {
             _exp = exp;
         }
         public BigNum(String s) {
-            this = Parse(s);
+            BigNum val = Parse(s);
+            _isLarge = val._isLarge;
+            _small = val._small;
+            _isNegative = val._isNegative;
+            _man = val._man;
+            _exp = val._exp;
         }
         public static BigNum operator +(BigNum a, BigNum b) {
             if (a._isNegative != b._isNegative) { return a - b; }
@@ -129,6 +134,11 @@ namespace ProjWizInc.Core.ADT {
             var (man2, exp2) = b.GetParts();
             return new BigNum(man1 * man2, exp1 + exp2);
         }
+        public static BigNum operator /(BigNum a, BigNum b) {
+            var (man1, exp1) = a.GetParts();
+            var (man2, exp2) = b.GetParts();
+            return new BigNum(man1 / man2, exp1 - exp2);
+        }
         private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
         //comparator section
         public static bool operator >(BigNum a, BigNum b) {
@@ -153,6 +163,9 @@ namespace ProjWizInc.Core.ADT {
         }
         public static bool operator <=(BigNum a, BigNum b) {
             return (a < b) || (a == b);
+        }
+        public static BigNum operator -(BigNum a) {
+            return new BigNum(0) - a;
         }
         /*
          * because BigNum is a struct, it uses Equals to operate ==, so this is not used

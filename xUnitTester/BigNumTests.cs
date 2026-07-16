@@ -200,5 +200,28 @@ namespace xUnitTester {
 
             Assert.Equal(expected, result.ToString());
         }
+        [Theory]
+        [InlineData("10","5","2")] // small small
+        [InlineData("1", "1e16", "1e-16")] //small big 
+        [InlineData("1e20", "1e2", "1e18")] //big small
+        [InlineData("1e16", "1e6", "10000000000")] // big small crossing boundry
+        public void Operator_Division_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum b = new BigNum(valB);
+            BigNum result = a / b;
+            Assert.Equal(expected, result.ToString());
+        }
+        [Theory]
+        [InlineData("10", "-10")]//small to negative small
+        [InlineData("1e20", "-1e20")]//big to negative big?
+        [InlineData("0.1", "-0.1")]//small fraction to negative
+        [InlineData("1e-20", "-1e-20")]//big fraction to negative
+        [InlineData("-10", "10")]//small negative to positive small
+        [InlineData("-1e20", "1e20")]//big negative to negative big?
+        public void Operator_Negation_CalculatesCorrectly(string valA, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum result = -a;
+            Assert.Equal(expected, result.ToString());
+        }
     }
 }

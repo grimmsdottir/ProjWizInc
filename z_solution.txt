@@ -1913,7 +1913,7 @@ namespace xUnitTester {
         [InlineData("0.1", "-0.1")]//small fraction to negative
         [InlineData("1e-20", "-1e-20")]//big fraction to negative
         [InlineData("-10", "10")]//small negative to positive small
-        [InlineData("-1e20", "1e20")]//big negative to negative big?
+        [InlineData("-1e20", "1e20")]//big negative to negative big
         public void Operator_Negation_CalculatesCorrectly(string valA, string expected) {
             BigNum a = new BigNum(valA);
             BigNum result = -a;

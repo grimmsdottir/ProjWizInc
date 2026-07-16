@@ -1824,6 +1824,9 @@ FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\TestHelpers.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -1834,22 +1837,45 @@ using System.Threading.Tasks;
 namespace xUnitTester {
     public class TestHelpers {
         public static DefinitionManager CreateTestingDefinitionManager() {
+            BigNum AMOUNT = new BigNum(69.67);
             //to build a DefinitionManager, we need a whole bunch of stuff
             //first are the dicts
             Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
             Dictionary<Type, Array> typeIdDefMap = [];
-            //then the test definition
+            //manually create some testing definitions
             ResourceDefinition testGold = new ResourceDefinition();
             testGold.Key = "gold";
             testGold.Id = 0;
+            //jobs are quite a bit more complex because of their components
+            JobDefinition testJob = new JobDefinition();
+            testJob.Key = "mine";
+            testJob.Id = 0;
+            PayoutComponent testPayout = new PayoutComponent();
+            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
+            //we also link the components here manually
+            testPayoutEntry.ResourceKey = testGold.Key;
+            testPayoutEntry.ResourceID = testGold.Id;
+            testPayoutEntry.Amount = AMOUNT;
+            RequiresTicksComponent testTicks = new RequiresTicksComponent();
+            testTicks.RequiredTicks = 100;
+            testJob.Components.Add(testPayout);
+            testJob.Components.Add(testTicks);
+
             //TODO: other definitions for job etc
             ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
             resourceIdDefMap[0] = testGold;
             Dictionary<string, int> resourceKeyIdMap= [];
             resourceKeyIdMap.Add(testGold.Key, testGold.Id);
+            JobDefinition[] jobIdDefMap = new JobDefinition[1];
+            jobIdDefMap[0] = testJob;
+            Dictionary<string, int> jobKeyIdMap = [];
+            jobKeyIdMap.Add(testJob.Key, testJob.Id);
 
             typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
             typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
+
+            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
+            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
 
             return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
         }
@@ -1870,11 +1896,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using ProjWizInc.Core.Events;
+using System.Runtime.CompilerServices;
 
 namespace xUnitTester.Managers {
     public class EconomyManagerTests {
         [Fact]
         public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            const double AMMOUNT_TO_ADD = 100.50;
             EventManager eventManager = new EventManager();
             EconomyState economyState = new EconomyState();
             economyState.Resources = new BigNum[1];
@@ -1882,13 +1910,14 @@ namespace xUnitTester.Managers {
 
             EconomyManager economyManager = new EconomyManager(eventManager,economyState);
 
-            BigNum amountToAdd = new BigNum(100.50);
+            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
             int goldId = 0;
 
             eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
 
             BigNum currentBalance = economyState.Resources[goldId];
-            Assert.Equal("100.50", currentBalance.ToString());
+            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
+            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
             
         }
     }
@@ -1923,12 +1952,11 @@ namespace xUnitTester.Managers {
             EventManager eventManager = new EventManager();
             JobState jobState = new JobState();
 
-            jobState.ActiveJobID = 0;
             jobState.Ticks = new BigNum(99);
 
             DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
             JobManager jobManager = new JobManager(eventManager,jobState,definitionManager);
-
+            jobManager.ToggleJob(0);
             _eventFired = false;
             eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
             for (int i = 0; i < 100; i++) {

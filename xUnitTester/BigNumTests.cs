@@ -129,17 +129,76 @@ namespace xUnitTester {
             // You'll need an explicit/implicit cast to double for this assertion
             //Assert.Equal(expectedValue, (double)result);
         }
-        //so basically we create a "theory", which we put in what we expect should happen given some data
-        //so for example, this theory is for addition, we expect that a + b = c
         [Theory]
-        [InlineData("10", "20", "30")]               // Simple long path
-        [InlineData("1.00e10", "1.00e10", "2.00e10")] // Simple mantissa path
-        [InlineData("9e18", "2e18", "1.10e19")]       // Crossing the threshold
-        [InlineData("1.00e20", "1", "1.00e20")]       // Testing absorption/precision
-        public void Addition_CalculatesCorrectly(string valA, string valB, string expected) {
-            var a = BigNum.Parse(valA);
-            var b = BigNum.Parse(valB);
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("99", "100", true)]    // Less than
+        [InlineData("101", "100", false)]  // Greater than (should fail <=)
+        public void Operator_LessThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
 
+            bool result = a <= b;
+
+            Assert.Equal(expected, result);
+        }
+        [Theory]
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("101", "100", true)]   // Greater than
+        [InlineData("99", "100", false)]   // Less than (should fail >=)
+        public void Operator_GreaterThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            bool result = a >= b;
+
+            Assert.Equal(expected, result);
+        }
+        [Fact]
+        public void Operator_Increment_SmallNumber_AddsOne() {
+            BigNum a = new BigNum(99);
+
+            // In C#, prefix/postfix ++ modifies the variable
+            a++;
+
+            Assert.Equal(new BigNum(100), a);
+        }
+
+        [Fact]
+        public void Operator_Increment_LargeNumber_AborbsOne() {
+            BigNum a = BigNum.Parse("1.00e20");
+
+            a++;
+
+            // Ticks should absorb the 1 and stay at 1.00e20 [3]
+            Assert.Equal("1.00e20", a.ToString());
+        }
+        [Theory]
+        [InlineData("100", "50", "50")]              // Small path subtraction
+        [InlineData("1.10e19", "2e18", "9.00e18")]   // Crossing back under the long threshold
+        [InlineData("10", "20", "-10")]             // Going negative
+        public void Operator_Subtraction_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            BigNum result = a - b;
+
+            Assert.Equal(expected, result.ToString());
+        }
+        [Theory]
+        [InlineData("10", "20", "200")]               // Small path multiplication
+        [InlineData("2.00e8", "3.00e8", "6.00e16")]   // Large path without normalization
+        [InlineData("5.00e8", "5.00e8", "2.50e17")]   // Large path WITH normalization (5*5=25 -> 2.5e11)
+        [InlineData("2.00e10", "3.00e10", "6.00e20")] //small * small = large
+        [InlineData("2.00e10", "3.00e20", "6.00e30")] //small * small = large
+        public void Operator_Multiplication_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            BigNum result = a * b;
+
+            Assert.Equal(expected, result.ToString());
         }
     }
 }

@@ -11,6 +11,7 @@ https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitio
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Blueprints/JobDefinition.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Blueprints/ResourceDefinition.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Common/DefinitionBase.cs
+https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Common/DefinitionEntity.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Common/IDefinitionComponentInterface.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Common/IEntryInterface.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.Core/Definitions/Common/ILinkableDefinitionInterface.cs

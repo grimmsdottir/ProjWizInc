@@ -37,7 +37,7 @@ namespace ProjWizInc.Core.ADT {
                 return;
             }
             //we check for the "internal exponent" like 150 should be 1.5e2
-            long intExp = (long)Math.Floor(Math.Log10(man));
+            long intExp = (long)Math.Floor(Math.Log10(Math.Abs(man)));
             //we pass along the internal exponent to the real exponent
             exp += intExp;
             //and we flatten the mantissa down to be >= 1 && <10
@@ -149,10 +149,10 @@ namespace ProjWizInc.Core.ADT {
         
         }
         public static bool operator >=(BigNum a, BigNum b) {
-           return (a > b) && (a == b);
+           return (a > b) || (a == b);
         }
         public static bool operator <=(BigNum a, BigNum b) {
-            return (a < b) && (a == b);
+            return (a < b) || (a == b);
         }
         /*
          * because BigNum is a struct, it uses Equals to operate ==, so this is not used
@@ -195,21 +195,20 @@ namespace ProjWizInc.Core.ADT {
             return new BigNum(long.Parse(s));
         }
         public override string ToString() {
-            //todo: allow for variable string formating, like k,m,qd,qt etc 
             if (!_isLarge) {
-                return _small.ToString();
+                // Force the invariant culture to guarantee a dot instead of a comma
+                return _small.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
-            return $"{_man:F2}e{_exp}";
+
+            // Explicitly format the double using InvariantCulture
+            string formattedMan = _man.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            return $"{formattedMan}e{_exp}";
         }
         //this one always returns the full 
         public string ToScientific(bool truncate) {
-            if (truncate) {
-                return $"{_man:F2}e{_exp}";
-            } else {
-                return $"{_man}e{_exp}";
-            }
-                
-
+            string format = truncate ? "F2" : "G";
+            string formattedMan = _man.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+            return $"{formattedMan}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
         public static implicit operator BigNum(long v) => new BigNum(v);

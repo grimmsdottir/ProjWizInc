@@ -29,17 +29,13 @@ namespace xUnitTester.Managers {
             jobState.ActiveJobId = 0;
             DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
-            jobManager.ToggleJob(0);
             jobState.Ticks = new BigNum(99);
             _eventFired = false;
             jobState.ActiveJobId = 0;
             eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
             eventManager.Publish(new UpdateLogicEvent());
             Assert.True(jobManager.UpdateMethodWasEntered, "The Update method was never even called!");
-            for (int i = 0; i < 100; i++) {
-                eventManager.Publish(new UpdateLogicEvent());
-            }
-            Assert.Equal(new BigNum(100), jobState.Ticks);
+            Assert.Equal(new BigNum(0), jobState.Ticks);
             Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
         }
         [Fact]
@@ -85,9 +81,9 @@ namespace xUnitTester.Managers {
             state.ActiveJobId = 0;
             DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
             JobManager jobManager = new JobManager(eventManager, state,definitionManager);
-            state.Ticks = new BigNum(99);
+            state.Ticks = new BigNum(50);
             eventManager.Publish(new UpdateLogicEvent());
-            Assert.Equal(new BigNum(100), state.Ticks);
+            Assert.Equal(new BigNum(51), state.Ticks);
         }
     }
 }

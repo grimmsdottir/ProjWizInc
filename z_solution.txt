@@ -759,7 +759,7 @@ namespace ProjWizInc.Core.Managers {
             DefinitionManager definitionManager = BuildDefinitionManager(rawData);
             ResolveDictionaryLinks(definitionManager);
             //construct basic managers
-            EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
             TimeManager timeManager = new TimeManager(eventManager, timeState);
@@ -952,18 +952,13 @@ namespace ProjWizInc.Core.Managers {
         private readonly EventManager _events;
         private readonly EconomyState _state;
         private readonly object _lock = new ();
-        private readonly int _resourceCount;
-        public EconomyManager(EventManager events, EconomyState state, int resourceCount) {
+        public EconomyManager(EventManager events, EconomyState state) {
             _state = state; ;
             _events = events;
-            _resourceCount = resourceCount;
             _events.Subscribe<UpdateLogicEvent>(Update);
-        }
-        public EconomyState State => _state;
-        public void Init() {
-            _state.Resources = new BigNum[_resourceCount];
             _events.Subscribe<ResourceGainedEvent>(AddResource);
         }
+        public EconomyState State => _state;
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {
@@ -1817,6 +1812,131 @@ namespace xUnitTester {
         public void Addition_CalculatesCorrectly(string valA, string valB, string expected) {
             var a = BigNum.Parse(valA);
             var b = BigNum.Parse(valB);
+
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\TestHelpers.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace xUnitTester {
+    public class TestHelpers {
+        public static DefinitionManager CreateTestingDefinitionManager() {
+            //to build a DefinitionManager, we need a whole bunch of stuff
+            //first are the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //then the test definition
+            ResourceDefinition testGold = new ResourceDefinition();
+            testGold.Key = "gold";
+            testGold.Id = 0;
+            //TODO: other definitions for job etc
+            ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
+            resourceIdDefMap[0] = testGold;
+            Dictionary<string, int> resourceKeyIdMap= [];
+            resourceKeyIdMap.Add(testGold.Key, testGold.Id);
+
+            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
+            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
+
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EconomyManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Events;
+
+namespace xUnitTester.Managers {
+    public class EconomyManagerTests {
+        [Fact]
+        public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            EventManager eventManager = new EventManager();
+            EconomyState economyState = new EconomyState();
+            economyState.Resources = new BigNum[1];
+            economyState.Resources[0] = new BigNum(0);
+
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
+
+            BigNum amountToAdd = new BigNum(100.50);
+            int goldId = 0;
+
+            eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
+
+            BigNum currentBalance = economyState.Resources[goldId];
+            Assert.Equal("100.50", currentBalance.ToString());
+            
+        }
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\JobManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using ProjWizInc.Core.Events;
+
+namespace xUnitTester.Managers {
+    
+    public class JobManagerTests {
+        private bool _eventFired = false;
+        private void OnResourceGained(ResourceGainedEvent e) {
+            _eventFired = true;
+        }
+        [Fact]
+        public void JobManager_Update_CompletesJob_WhenTicksReached() {
+            EventManager eventManager = new EventManager();
+            JobState jobState = new JobState();
+
+            jobState.ActiveJobID = 0;
+            jobState.Ticks = new BigNum(99);
+
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager,jobState,definitionManager);
+
+            _eventFired = false;
+            eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
+            for (int i = 0; i < 100; i++) {
+                eventManager.Publish<UpdateLogicEvent>(new UpdateLogicEvent());
+            }
+            Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
+
+
 
         }
     }

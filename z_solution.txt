@@ -433,62 +433,26 @@ namespace ProjWizInc.Core.Definitions {
         //but it should basically be like <Type,Type[]>
         //the int ids from the first dictionary map to the position in the defStore, for high performance
         private readonly Dictionary<Type, Array> _typeIdDefMap = [];
-
-
-        private const string RESOURCES_PATH = "resourceDefs.json";
-        public List<ResourceDefinition> Registry { get; private set; }
-        public DefinitionManager() { 
-            Registry = [];
+        internal DefinitionManager(
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            _typeKeyIdMap = typeKeyIdMap;
+            _typeIdDefMap = typeIdDefMap;
         }
-        public void Init() {
-            //read json as string
-            string jsonString = File.ReadAllText(RESOURCES_PATH);
-            //convert jsonString into a giant GameDefinitions object
-            var data = JsonSerializer.Deserialize<GameDefinitions>(jsonString);
-            if (data == null) {
-                //throw some big ass exception
-                return;
-            }
-            //same as the GameDefinitions, we gotta do this one manually
-            RegisterDefinition(data.Resources);
-            RegisterDefinition(data.Jobs);
-            //we only deal with the links once everything is done, cant do plumbing of an in construction house they say
-            ResolveAllLinks();
-
-        }
-        //this function accepts a list of whatever, in this case resources and jobs for now
-        private void RegisterDefinition<T>(List<T> list) where T : DefinitionBase {
-            //string to int map for the type
-            var keyIdMap = new Dictionary<string, int>();
-            //array that holds all the defs
-            var idDefMap = new T[list.Count];
-            for (int i = 0; i < list.Count; i++) {
-                var def = list[i];
-                def.Id = i;
-                keyIdMap[def.Key] = i;
-                idDefMap[i] = def;
-            }
-            _typeKeyIdMap[typeof(T)] = keyIdMap;
-            _typeIdDefMap[typeof(T)] = idDefMap;
-        }
-        private void ResolveAllLinks() {
-            foreach (var idDefMap in _typeIdDefMap.Values) {
-                foreach (var def in idDefMap) {
-                    if (def is DefinitionBase entity) {
-                        foreach(var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
-                            feature.ResolveLinks(this);
-                        }
-                    }
-                }
-            }
+        //this one is like a get all dicts, but as an IEnumarable, which is basically like a copy/immutable
+        //collection. Primary use is for linking right now
+        public IEnumerable<Array> GetAllDefinitions() {
+            return _typeIdDefMap.Values;
         }
         //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
-            if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
-                var typedArray = (T[])array;
+            Array rawArray;
+            if (_typeIdDefMap.TryGetValue(typeof(T), out rawArray)) {
+                T[] typedArray = (T[])rawArray;
                 return typedArray[id];
             }
-            throw new ArgumentException("Attempted to get definition of "+typeof(T)+", which does not exist");
+            throw new ArgumentException("Attempted to get definition of " + typeof(T).Name + ", which does not exist");
         }
         //primarily used by defs for linking
         public int GetID<T>(string key) where T:DefinitionBase{
@@ -502,24 +466,6 @@ namespace ProjWizInc.Core.Definitions {
             }
             return _typeIdDefMap[typeof(T)].Length;
         }
-        private string GetConfigPath(string fileName) {
-            //for when we are done done then we place this next to the .exe
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            return Path.Combine(baseDir, "Data", fileName);
-        }
-        public void GenerateTemplate() {
-            string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
-            string dataPath = Path.Combine(projectRoot, "Data", "defs.json");
-            //string path = GetConfigPath(RESOURCES_PATH);
-            if (!File.Exists(dataPath)) {
-                Directory.CreateDirectory(Path.GetDirectoryName(dataPath));
-            }
-            var template = new GameDefinitions();
-
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(template, options);
-            File.WriteAllText(dataPath, json);
-        }
     }
 }
 
@@ -528,6 +474,7 @@ namespace ProjWizInc.Core.Definitions {
 ==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\GameDefinitions.cs
 ==============================================================================
+using ProjWizInc.Core.Definitions.Blueprints;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -554,8 +501,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions {
-    public class JobDefinition : DefinitionBase {
+namespace ProjWizInc.Core.Definitions.Blueprints {
+    public class JobDefinition : DefinitionEntity {
         
     }
 }
@@ -593,7 +540,24 @@ namespace ProjWizInc.Core.Definitions.Common {
         public string Key { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public int Id { get; set; } = -1;
-        //holds our features
+        
+    }
+}
+
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\DefinitionEntity.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public class DefinitionEntity : DefinitionBase{
+        //holds our components
         public List<IDefinitionComponentInterface> Components { get; set; } = [];
         // Helper method to quickly find a specific component
         public T GetComponent<T>() where T : IDefinitionComponentInterface {
@@ -673,7 +637,7 @@ using ProjWizInc.Core.Managers;
 using System.Resources;
 using System.Text.Json.Serialization;
 
-namespace ProjWizInc.Core.Definitions.Features {
+namespace ProjWizInc.Core.Definitions.Components {
     
     public class PayoutComponent : IDefinitionComponentInterface, ILinkableDefinitionInterface {
         public List<ResourcePayoutEntry> PayoutEntries { get; set; } = [];
@@ -758,11 +722,17 @@ namespace ProjWizInc.Core.Events {
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Persistence;
 using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -772,9 +742,10 @@ namespace ProjWizInc.Core.Managers {
      * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
      */
     public class Bootstrapper {
-        public static ContextManager BuildContext() {
+        public const string DEFINITIONS_FILEPATH = "defs.json";
+        public static CoreContext BuildContext() {
             //read jsons
-
+            SerialisationService serialiser = new SerialisationService();
             //TODO: for now we just make a new state each time, but later on we should try to load a save file
             GameState gameState = new GameState();
             //now we slice up the GameState into slices to pass to the managers
@@ -783,13 +754,16 @@ namespace ProjWizInc.Core.Managers {
             TimeState timeState = gameState.timeState;
             //special managers that need to be initialised first
             EventManager eventManager = new EventManager();
-            DefinitionManager definitionManager = new DefinitionManager();
+            //the definition manager is so special it gets its own section lol
+            GameDefinitions rawData = serialiser.Load<GameDefinitions>(DEFINITIONS_FILEPATH);
+            DefinitionManager definitionManager = BuildDefinitionManager(rawData);
+            ResolveDictionaryLinks(definitionManager);
             //construct basic managers
             EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
             TimeManager timeManager = new TimeManager(eventManager, timeState);
-            return new ContextManager(
+            return new CoreContext(
                 definitionManager,
                 eventManager,
                 economyManager,
@@ -798,6 +772,93 @@ namespace ProjWizInc.Core.Managers {
                 timeManager
                 );
         }
+        private static void ResolveDictionaryLinks(DefinitionManager definitionManager) {
+            IEnumerable<Array> allTypeIdDefMaps = definitionManager.GetAllDefinitions();
+            //so this enumarates over each Type in the typeIdDefMap
+            foreach (Array idDefMaps in allTypeIdDefMaps) { 
+                //we use object here because it could be resource or job or whatever, and T would be overkill
+                foreach (object item in idDefMaps) {
+                    if (item is DefinitionEntity entity) {
+                        foreach (IDefinitionComponentInterface component in entity.Components) {
+                            if (component is ILinkableDefinitionInterface linkable) {
+                                linkable.ResolveLinks(definitionManager);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //the definition manager is so chonky we split it out to here
+        private static DefinitionManager BuildDefinitionManager(GameDefinitions rawData) {
+            //first we read the json and get the GameDefinitions
+            
+            //then we create the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //then we fill the dictionaries
+            PopulateAllDictionaries(rawData, typeKeyIdMap, typeIdDefMap);
+            //we arent done yet, because we havent resolved links, but its good enough
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+        //wizardly reflection something magic, idk
+        private static void PopulateAllDictionaries(
+            GameDefinitions data,
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            // We look at every property in GameDefinitions (Resources, Jobs, etc.)
+            var properties = typeof(GameDefinitions).GetProperties();
+
+            foreach (var prop in properties) {
+                // Check if the property is a List<T> where T inherits from DefinitionBase
+                if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
+                    var listValue = prop.GetValue(data);
+                    if (listValue == null) continue;
+
+                    // Get the specific type (e.g., ResourceDefinition)
+                    var itemType = prop.PropertyType.GetGenericArguments()[0];
+
+                    // Use 'MakeGenericMethod' to call your PopulateRegistry<T> method dynamically
+                    var method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                    var genericMethod = method.MakeGenericMethod(itemType);
+
+                    genericMethod.Invoke(null, new object[] { listValue, typeKeyIdMap, typeIdDefMap });
+                }
+            }
+        }
+        /* this hecking thing is the definition buildertron, which is so complex, imma write this down here so i remember
+         * T - the type of definition, which will need to be hard coded, for each type of definition,
+         * like JobDefinition and Resource definition
+         * items - this will be the contents of GameDefinitions.SomeDefinition that we got from the json
+         * typeKeyIdMap - the name should be self evident, but its still a mindbender. so the key of the outer layer
+         * dict is the dynamic subtype of the definition, so gold, wood etc in ResourceDefinitions, the the value is
+         * another hecking dict, which maps strings to in, so the "gold" in .json gets translated to a number
+         * typeIdDef - like above the outer layer is the same, but the inner layer is an array of actual definitions
+         * so like the gold definition with all its components and name etc
+         * we go through this song and dance so that when somebody wants a definition, they just give a number and 
+         * we can give it them just like that
+         * for the front end and for linking, they dont know the number of the thing, they only have the string of the 
+         * thing, so thats what the first dictionary is for, which they use to peruse the second dictionary
+         * also because of glorious pass by reference, we only need to init the outer dictionaries once and pass it
+         */
+        private static void PopulateDictionaries<T>(
+            List<T> items,
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) where T : DefinitionBase {
+            var idDefMap = new T[items.Count];
+            var keyIdMap = new Dictionary<string, int>();
+            //so first we prepare the inner dict/array
+            for (int i = 0; i < items.Count; i++) {
+                items[i].Id = i;
+                keyIdMap[items[i].Key] = i;
+                idDefMap[i] = items[i];
+            }
+            //then we stock the outer dict
+            typeKeyIdMap[typeof(T)] = keyIdMap;
+            typeIdDefMap[typeof(T)] = idDefMap;
+        }
+        
     }
 }
 
@@ -816,7 +877,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-    public class ContextManager {
+    public class CoreContext {
         //our special managers
         private readonly EventManager _event;
         private readonly DefinitionManager _defs;
@@ -826,7 +887,7 @@ namespace ProjWizInc.Core.Managers {
         private readonly JobManager _jobs;
         private readonly TimeManager _time;
         //we arrange our managers alphabetically, and specials first
-        public ContextManager(
+        public CoreContext(
             DefinitionManager definitionManager,
             EventManager eventManager,
             EconomyManager economyManager,

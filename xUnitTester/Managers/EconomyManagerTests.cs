@@ -7,11 +7,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using ProjWizInc.Core.Events;
+using System.Runtime.CompilerServices;
 
 namespace xUnitTester.Managers {
     public class EconomyManagerTests {
         [Fact]
         public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            const double AMMOUNT_TO_ADD = 100.50;
             EventManager eventManager = new EventManager();
             EconomyState economyState = new EconomyState();
             economyState.Resources = new BigNum[1];
@@ -19,13 +21,14 @@ namespace xUnitTester.Managers {
 
             EconomyManager economyManager = new EconomyManager(eventManager,economyState);
 
-            BigNum amountToAdd = new BigNum(100.50);
+            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
             int goldId = 0;
 
             eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
 
             BigNum currentBalance = economyState.Resources[goldId];
-            Assert.Equal("100.50", currentBalance.ToString());
+            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
+            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
             
         }
     }

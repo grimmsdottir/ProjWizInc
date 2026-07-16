@@ -22,12 +22,11 @@ namespace xUnitTester.Managers {
             EventManager eventManager = new EventManager();
             JobState jobState = new JobState();
 
-            jobState.ActiveJobID = 0;
             jobState.Ticks = new BigNum(99);
 
             DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
             JobManager jobManager = new JobManager(eventManager,jobState,definitionManager);
-
+            jobManager.ToggleJob(0);
             _eventFired = false;
             eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
             for (int i = 0; i < 100; i++) {

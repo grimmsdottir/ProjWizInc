@@ -1,8 +1,6 @@
-# save as z_cs_to_gist.ps1
-[string]$outputFile = "z_solution.txt"
-[string]$tokenFile = "github_token.txt"
-[string]$gistIdFile = "gist_id.txt"
-[array]$excludeFolders = @("obj", "bin", ".vs", ".git")
+# save as merge_files.ps1
+$outputFile = "z_solution.txt"
+$excludeFolders = @("obj", "bin", ".vs", ".git")
 
 # Verify the security token exists before starting
 if (-not (Test-Path $tokenFile)) {
@@ -64,42 +62,15 @@ $headers.Add("X-GitHub-Api-Version", "2022-11-28")
     }
 }
 
-[string]$jsonPayload = ConvertTo-Json -InputObject $payload -Depth 4
-
-# Check if we already have an existing Gist to update
-if (Test-Path $gistIdFile) {
-    [string]$gistId = (Get-Content -Path $gistIdFile -Raw).Trim()
-    Write-Host "Updating existing Gist (ID: $gistId)..." -ForegroundColor Yellow
-
-    try {
-        [string]$url = "https://api.github.com/gists/$gistId"
-        
-        # FIX: Changed [hashtable] to [PSCustomObject]
-        [PSCustomObject]$response = Invoke-RestMethod -Uri $url -Method Patch -Headers $headers -Body $jsonPayload -ContentType "application/json"
-        
-        Write-Host "Gist updated successfully!" -ForegroundColor Green
-        Write-Host "Raw URL: $($response.files.'z_solution.txt'.raw_url)" -ForegroundColor Cyan
-    }
-    catch {
-        Write-Error "Failed to update Gist: $_"
-    }
-} else {
-    Write-Host "Creating a NEW Gist..." -ForegroundColor Yellow
-
-    try {
-        [string]$url = "https://api.github.com/gists"
-        
-        # FIX: Changed [hashtable] to [PSCustomObject]
-        [PSCustomObject]$response = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $jsonPayload -ContentType "application/json"
-        
-        # Save the new Gist ID so we can update it next time instead of creating duplicates
-        [string]$newGistId = $response.id
-        $newGistId | Out-File -FilePath $gistIdFile -Force
-        
-        Write-Host "New Gist created successfully! ID saved to $gistIdFile." -ForegroundColor Green
-        Write-Host "Raw URL: $($response.files.'z_solution.txt'.raw_url)" -ForegroundColor Cyan
-    }
-    catch {
-        Write-Error "Failed to create Gist: $_"
+if (Test-Path ".git") {
+    git add $outputFile
+    $status = git status --porcelain $outputFile
+    if ($status) {
+        $dt = Get-Date -Format "yyyy-MM-dd HH:mm"
+        git commit -m "Auto-merge update: $dt"
+        git push
+        Write-Host "Changes pushed to GitHub successfully." -ForegroundColor Green
+    } else {
+        Write-Host "No changes to merge file; skipping push." -ForegroundColor Yellow
     }
 }

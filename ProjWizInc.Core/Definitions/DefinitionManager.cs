@@ -36,11 +36,12 @@ namespace ProjWizInc.Core.Definitions {
         }
         //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
-            if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {
-                var typedArray = (T[])array;
+            Array rawArray;
+            if (_typeIdDefMap.TryGetValue(typeof(T), out rawArray)) {
+                T[] typedArray = (T[])rawArray;
                 return typedArray[id];
             }
-            throw new ArgumentException("Attempted to get definition of "+typeof(T)+", which does not exist");
+            throw new ArgumentException("Attempted to get definition of " + typeof(T).Name + ", which does not exist");
         }
         //primarily used by defs for linking
         public int GetID<T>(string key) where T:DefinitionBase{

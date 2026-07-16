@@ -55,8 +55,7 @@ namespace ProjWizInc.Core.Managers {
             foreach (Array idDefMaps in allTypeIdDefMaps) { 
                 //we use object here because it could be resource or job or whatever, and T would be overkill
                 foreach (object item in idDefMaps) {
-                    //is this neccesary? will we have stuff that arent definitions in GameDefinitions?
-                    if (item is DefinitionBase entity) 
+                    if (item is DefinitionEntity entity) {
                         foreach (IDefinitionComponentInterface component in entity.Components) {
                             if (component is ILinkableDefinitionInterface linkable) {
                                 linkable.ResolveLinks(definitionManager);

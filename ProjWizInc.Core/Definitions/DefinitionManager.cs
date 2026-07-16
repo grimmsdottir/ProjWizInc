@@ -29,42 +29,11 @@ namespace ProjWizInc.Core.Definitions {
             _typeKeyIdMap = typeKeyIdMap;
             _typeIdDefMap = typeIdDefMap;
         }
-        /*
-        public void Init() {
-            //same as the GameDefinitions, we gotta do this one manually
-            RegisterDefinition(data.Resources);
-            RegisterDefinition(data.Jobs);
-            //we only deal with the links once everything is done, cant do plumbing of an in construction house they say
-            ResolveAllLinks();
-
+        //this one is like a get all dicts, but as an IEnumarable, which is basically like a copy/immutable
+        //collection. Primary use is for linking right now
+        public IEnumerable<Array> GetAllDefinitions() {
+            return _typeIdDefMap.Values;
         }
-        //this function accepts a list of whatever, in this case resources and jobs for now
-        private void RegisterDefinition<T>(List<T> list) where T : DefinitionBase {
-            //string to int map for the type
-            var keyIdMap = new Dictionary<string, int>();
-            //array that holds all the defs
-            var idDefMap = new T[list.Count];
-            for (int i = 0; i < list.Count; i++) {
-                var def = list[i];
-                def.Id = i;
-                keyIdMap[def.Key] = i;
-                idDefMap[i] = def;
-            }
-            _typeKeyIdMap[typeof(T)] = keyIdMap;
-            _typeIdDefMap[typeof(T)] = idDefMap;
-        }
-        private void ResolveAllLinks() {
-            foreach (var idDefMap in _typeIdDefMap.Values) {
-                foreach (var def in idDefMap) {
-                    if (def is DefinitionBase entity) {
-                        foreach (var feature in entity.Components.OfType<ILinkableDefinitionInterface>()) {
-                            feature.ResolveLinks(this);
-                        }
-                    }
-                }
-            }
-        }
-        */
         //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {
             if (_typeIdDefMap.TryGetValue(typeof(T), out var array)) {

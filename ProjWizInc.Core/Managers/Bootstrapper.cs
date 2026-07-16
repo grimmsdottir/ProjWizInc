@@ -34,7 +34,7 @@ namespace ProjWizInc.Core.Managers {
             //the definition manager is so special it gets its own section lol
             GameDefinitions rawData = serialiser.Load<GameDefinitions>(DEFINITIONS_FILEPATH);
             DefinitionManager definitionManager = BuildDefinitionManager(rawData);
-            ResolveDictionaryLinks(rawData, definitionManager);
+            ResolveDictionaryLinks(definitionManager);
             //construct basic managers
             EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
@@ -49,10 +49,20 @@ namespace ProjWizInc.Core.Managers {
                 timeManager
                 );
         }
-        private static void ResolveDictionaryLinks(GameDefinitions rawData, DefinitionManager definitionManager) {
-            foreach (var job in rawData.Jobs) {
-                foreach (var comp in job.Components.OfType<ILinkableDefinitionInterface>()) {
-                    comp.ResolveLinks(definitionManager);
+        private static void ResolveDictionaryLinks(DefinitionManager definitionManager) {
+            IEnumerable<Array> allTypeIdDefMaps = definitionManager.GetAllDefinitions();
+            //so this enumarates over each Type in the typeIdDefMap
+            foreach (Array idDefMaps in allTypeIdDefMaps) { 
+                //we use object here because it could be resource or job or whatever, and T would be overkill
+                foreach (object item in idDefMaps) {
+                    //is this neccesary? will we have stuff that arent definitions in GameDefinitions?
+                    if (item is DefinitionBase entity) 
+                        foreach (IDefinitionComponentInterface component in entity.Components) {
+                            if (component is ILinkableDefinitionInterface linkable) {
+                                linkable.ResolveLinks(definitionManager);
+                            }
+                        }
+                    }
                 }
             }
         }

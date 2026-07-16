@@ -2,6 +2,7 @@
 using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,7 +23,7 @@ namespace ProjWizInc.Core.Definitions {
         //but it should basically be like <Type,Type[]>
         //the int ids from the first dictionary map to the position in the defStore, for high performance
         private readonly Dictionary<Type, Array> _typeIdDefMap = [];
-        internal DefinitionManager(
+        public DefinitionManager(
             Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
             Dictionary<Type, Array> typeIdDefMap
             ) {
@@ -33,6 +34,12 @@ namespace ProjWizInc.Core.Definitions {
         //collection. Primary use is for linking right now
         public IEnumerable<Array> GetAllDefinitions() {
             return _typeIdDefMap.Values;
+        }
+        public IReadOnlyDictionary<Type, Dictionary<string, int>> GetAllTypeKeyIdMaps() {
+            return _typeKeyIdMap;
+        }
+        public IReadOnlyDictionary<Type, Array> GetAllTypeIdDefMaps() {
+            return _typeIdDefMap;
         }
         //primarily used by the managers
         public T GetDefinition<T>(int id) where T:DefinitionBase {

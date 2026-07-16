@@ -24,12 +24,15 @@ namespace ProjWizInc.Core.Managers {
             _events = events;
             _defs = definitionManager;
             _state = state;
+            if (_state.ActiveJobId != -1) {
+                CacheState(_state.ActiveJobId);
+            }
             _events.Subscribe<UpdateLogicEvent>(Update);
         } 
         public void ToggleJob(int jobId) {
             //basically if we click the current job, it just stops it, but if we click something else, we 
             //move to that one instead
-            if (_state.ActiveJobID == jobId) {
+            if (_state.ActiveJobId == jobId) {
                 _state.Reset();
             } else {
                 CacheState(jobId);
@@ -41,15 +44,15 @@ namespace ProjWizInc.Core.Managers {
                 //todo: log and complain about illegal arguement
                 return;
             } else {
-                _state.ActiveJobID = jobId;
+                _state.ActiveJobId = jobId;
                 _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
-                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent< RequiresTicksComponent>();
+                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent<RequiresTicksComponent>();
                 _state.Ticks = 0;
                 _state.JobPayout = _state.ActiveJobDef.GetComponent<PayoutComponent>();
             }
         }
         public void Update(UpdateLogicEvent e) {
-            if (_state.ActiveJobID == -1) { return; }
+            if (_state.ActiveJobId == -1) { return; }
             if (_state.JobTicksRequired != null) {
                 _state.Ticks++;
                 if (_state.Ticks >= _state.JobTicksRequired.RequiredTicks) {
@@ -58,7 +61,7 @@ namespace ProjWizInc.Core.Managers {
                 }
             }
         }
-        private void CompleteJob() {
+        public void CompleteJob() {
             if (_state.JobPayout != null) {
                 foreach (ResourcePayoutEntry entry in _state.JobPayout.PayoutEntries) {
                     int id = entry.ResourceID;
@@ -66,7 +69,7 @@ namespace ProjWizInc.Core.Managers {
                     _events.Publish(new ResourceGainedEvent(id,amount));
                 }
             }
-            _events.Publish(new JobCompleted(_state.ActiveJobID));
+            _events.Publish(new JobCompleted(_state.ActiveJobId));
         }
     }
 }

@@ -38,5 +38,7 @@ https://github.com/grimmsdottir/ProjWizInc/blob/master/ProjWizInc.WinForms/Progr
 https://github.com/grimmsdottir/ProjWizInc/blob/master/Testertron/Program.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/BigNumTests.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/TestHelpers.cs
+https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/Managers/DefinitionManagerTests.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/Managers/EconomyManagerTests.cs
+https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/Managers/EventManagerTests.cs
 https://github.com/grimmsdottir/ProjWizInc/blob/master/xUnitTester/Managers/JobManagerTests.cs

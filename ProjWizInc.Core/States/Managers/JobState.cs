@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.States.Managers {
     public class JobState {
-        public int ActiveJobID { get; set; } = -1;
+        public int ActiveJobId { get; set; } = -1;
         //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
         public JobDefinition? ActiveJobDef { get; set; } = null;
         //we also keep a cache of any components and their state vars like ticks and xp
@@ -19,7 +19,7 @@ namespace ProjWizInc.Core.States.Managers {
         public PayoutComponent? JobPayout { get; set; } = null;
         //a handy reset function for nulling everything
         public void Reset() {
-            ActiveJobID = -1;
+            ActiveJobId = -1;
             ActiveJobDef = null;
             JobTicksRequired = null;
             Ticks = 0;

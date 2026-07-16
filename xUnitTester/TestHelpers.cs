@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 namespace xUnitTester {
     public class TestHelpers {
         public static DefinitionManager CreateTestingDefinitionManager() {
-            BigNum AMOUNT = new BigNum(69.67);
+            BigNum AMOUNT = new BigNum(69.69);
             //to build a DefinitionManager, we need a whole bunch of stuff
             //first are the dicts
             Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
@@ -26,18 +26,19 @@ namespace xUnitTester {
             JobDefinition testJob = new JobDefinition();
             testJob.Key = "mine";
             testJob.Id = 0;
+
+            //we also link the components here manually
             PayoutComponent testPayout = new PayoutComponent();
             ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
-            //we also link the components here manually
             testPayoutEntry.ResourceKey = testGold.Key;
             testPayoutEntry.ResourceID = testGold.Id;
             testPayoutEntry.Amount = AMOUNT;
+            testPayout.PayoutEntries.Add(testPayoutEntry);
             RequiresTicksComponent testTicks = new RequiresTicksComponent();
             testTicks.RequiredTicks = 100;
             testJob.Components.Add(testPayout);
             testJob.Components.Add(testTicks);
 
-            //TODO: other definitions for job etc
             ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
             resourceIdDefMap[0] = testGold;
             Dictionary<string, int> resourceKeyIdMap= [];

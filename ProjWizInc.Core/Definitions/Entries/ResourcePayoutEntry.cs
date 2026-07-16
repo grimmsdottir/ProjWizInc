@@ -13,7 +13,7 @@ namespace ProjWizInc.Core.Definitions.Entries {
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important
         [JsonIgnore]
-        public int ResourceID { get; internal set; }
+        public int ResourceID { get; set; }
 
     }
 }

@@ -23,6 +23,7 @@ namespace xUnitTester.Managers {
         }
         [Fact]
         public void JobManager_Update_CompletesJob_WhenTicksReached() {
+            
             EventManager eventManager = new EventManager();
             JobState jobState = new JobState();
             jobState.ActiveJobId = 0;
@@ -31,11 +32,26 @@ namespace xUnitTester.Managers {
             jobManager.ToggleJob(0);
             jobState.Ticks = new BigNum(99);
             _eventFired = false;
+            jobState.ActiveJobId = 0;
             eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.True(jobManager.UpdateMethodWasEntered, "The Update method was never even called!");
             for (int i = 0; i < 100; i++) {
-                eventManager.Publish<UpdateLogicEvent>(new UpdateLogicEvent());
+                eventManager.Publish(new UpdateLogicEvent());
             }
+            Assert.Equal(new BigNum(100), jobState.Ticks);
             Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
+        }
+        [Fact]
+        public void Prove_Type_Consistency() {
+            // Type used by the Test
+            Type testType = typeof(UpdateLogicEvent);
+
+            // Type used by the Core
+            Type coreType = typeof(ProjWizInc.Core.Events.UpdateLogicEvent);
+
+            // If this assertion fails, you have a duplicate file causing an assembly mismatch!
+            Assert.Equal(coreType.AssemblyQualifiedName, testType.AssemblyQualifiedName);
         }
         [Fact]
         public void JobManager_ManualComplete_PublishesEvent() {
@@ -58,7 +74,7 @@ namespace xUnitTester.Managers {
             JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
             Assert.NotNull(jobDefinition);
             Assert.Equal(2, jobDefinition.Components.Count);
-
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
             Assert.NotNull(state.JobTicksRequired);
             Assert.NotNull(state.JobPayout);
         }

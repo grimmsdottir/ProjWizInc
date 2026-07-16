@@ -10,4 +10,11 @@
     <Folder Include="Data\EntityData\" />
   </ItemGroup>
 
+	<ItemGroup>
+		<!-- This tells the compiler that 'xUnitTester' is a trusted friend -->
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>xUnitTester</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
 </Project>

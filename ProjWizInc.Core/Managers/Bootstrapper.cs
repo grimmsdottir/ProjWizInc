@@ -36,7 +36,7 @@ namespace ProjWizInc.Core.Managers {
             DefinitionManager definitionManager = BuildDefinitionManager(rawData);
             ResolveDictionaryLinks(definitionManager);
             //construct basic managers
-            EconomyManager economyManager = new EconomyManager(eventManager,economyState,definitionManager.GetDefCount<ResourceDefinition>());
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
             TimeManager timeManager = new TimeManager(eventManager, timeState);

@@ -17,18 +17,13 @@ namespace ProjWizInc.Core.Managers {
         private readonly EventManager _events;
         private readonly EconomyState _state;
         private readonly object _lock = new ();
-        private readonly int _resourceCount;
-        public EconomyManager(EventManager events, EconomyState state, int resourceCount) {
+        public EconomyManager(EventManager events, EconomyState state) {
             _state = state; ;
             _events = events;
-            _resourceCount = resourceCount;
             _events.Subscribe<UpdateLogicEvent>(Update);
-        }
-        public EconomyState State => _state;
-        public void Init() {
-            _state.Resources = new BigNum[_resourceCount];
             _events.Subscribe<ResourceGainedEvent>(AddResource);
         }
+        public EconomyState State => _state;
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {

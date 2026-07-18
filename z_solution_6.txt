@@ -1,0 +1,408 @@
+﻿==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\TestHelpers.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Managers;
+
+namespace xUnitTester {
+    public class TestHelpers {
+        public const string TEST_GOLD_KEY = "gold";
+        public const int TEST_GOLD_ID = 0;
+        public const string TEST_JOB_KEY = "mine";
+        public const int TEST_JOB_ID = 0;
+        public static readonly BigNum TEST_PAYOUT_AMOUNT = new BigNum(12.34);
+        public static readonly BigNum TEST_REQUIRED_TICKS = new BigNum(100);
+        public static ResourceDefinition CreateTestGoldResourceDefinition() {
+            ResourceDefinition testGold = new ResourceDefinition();
+            testGold.Key = TEST_GOLD_KEY;
+            testGold.Id = TEST_GOLD_ID;
+            return testGold;
+        }
+        public static ResourcePayoutEntry CreateTestPayoutEntry() {
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
+            testPayoutEntry.ResourceKey = testGold.Key;
+            testPayoutEntry.ResourceID = testGold.Id;
+            testPayoutEntry.Amount = TEST_PAYOUT_AMOUNT;
+            return testPayoutEntry;
+        }
+        public static PayoutComponent CreateTestPayoutComponent() {
+            PayoutComponent testPayoutComponent = new PayoutComponent();
+            testPayoutComponent.PayoutEntries.Add(CreateTestPayoutEntry());
+            return testPayoutComponent;
+        }
+        public static RequiresTicksComponent CreateTestTicksComponent() {
+            RequiresTicksComponent testTicksComponent = new RequiresTicksComponent();
+            testTicksComponent.RequiredTicks = TEST_REQUIRED_TICKS;
+            return testTicksComponent;
+        }
+        public static JobDefinition CreateTestJobDefinition() {
+            JobDefinition testJob = new JobDefinition();
+            testJob.Key = TEST_JOB_KEY;
+            testJob.Id = TEST_JOB_ID;
+            testJob.Components.Add(CreateTestPayoutComponent());
+            testJob.Components.Add(CreateTestTicksComponent());
+            return testJob;
+        }
+        public static IEnumerable<object[]> GetValidDefinitions() {
+            List<object[]> testData = new List<object[]>();
+
+            ResourceDefinition resourceDef = CreateTestGoldResourceDefinition();
+            testData.Add(new object[] { resourceDef });
+
+            JobDefinition jobDef = CreateTestJobDefinition();
+            testData.Add(new object[] { jobDef });
+
+            return testData;
+        }
+        [Theory]
+        [MemberData(nameof(GetValidDefinitions))]
+        public void TestDefinition_HasValidKeyAndId(DefinitionBase definition) {
+            DefinitionBase castedDef = definition;
+            Assert.NotEmpty(castedDef.Key);
+            Assert.True(castedDef.Id >= 0);
+        }
+        public static GameDefinitions CreateTestingGameDefinitions() {
+            GameDefinitions gameDefinitions = new GameDefinitions();
+            gameDefinitions.Resources.Add(CreateTestGoldResourceDefinition());
+            gameDefinitions.Jobs.Add(CreateTestJobDefinition());
+            return gameDefinitions;
+        }
+        [Fact]
+        public void CreateTestingGameDefinitions_CreatesValidDefinitions() {
+            GameDefinitions definitions = CreateTestingGameDefinitions();
+            Assert.NotNull(definitions);
+            Assert.NotEmpty(definitions.Resources);
+            Assert.NotEmpty(definitions.Jobs);
+            Assert.Equal(TEST_GOLD_KEY, definitions.Resources[0].Key);
+            Assert.Equal(TEST_JOB_KEY, definitions.Jobs[0].Key);
+        }
+        public static DefinitionManager CreateTestingDefinitionManager() {
+            BigNum AMOUNT = new BigNum(69.69);
+            //to build a DefinitionManager, we need a whole bunch of stuff
+            //first are the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //manually create some testing definitions
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            //jobs are quite a bit more complex because of their components
+            JobDefinition testJob = CreateTestJobDefinition();
+
+            ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
+            resourceIdDefMap[0] = testGold;
+            Dictionary<string, int> resourceKeyIdMap= [];
+            resourceKeyIdMap.Add(testGold.Key, testGold.Id);
+            JobDefinition[] jobIdDefMap = new JobDefinition[1];
+            jobIdDefMap[0] = testJob;
+            Dictionary<string, int> jobKeyIdMap = [];
+            jobKeyIdMap.Add(testJob.Key, testJob.Id);
+
+            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
+            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
+
+            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
+            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
+
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+        /*
+        public static JobManager CreateTestJobManager() {
+            JobManager testJobManager = new JobManager()
+        }
+        */
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\DefinitionManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
+
+namespace xUnitTester.Managers {
+    public class DefinitionManagerTests {
+        [Fact]
+        public void TestHelpers_BuildsCorrectDefinitionManager() {
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            IReadOnlyDictionary<Type, Dictionary<string, int>> typeKeyIdMap = definitionManager.GetAllTypeKeyIdMaps();
+            IReadOnlyDictionary< Type, Array > typeIdDefMap = definitionManager.GetAllTypeIdDefMaps();
+            Assert.NotNull(typeKeyIdMap);
+            Assert.NotNull(typeIdDefMap);
+
+
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            //check if the jobdefinition is valid
+            Assert.NotNull(jobDefinition);
+            Assert.Equal("mine",jobDefinition.Key);
+            Assert.Equal(0, jobDefinition.Id);
+
+            PayoutComponent payoutComponent= jobDefinition.GetComponent<PayoutComponent>();
+            Assert.NotNull(payoutComponent);
+            Assert.NotNull(payoutComponent.PayoutEntries);
+            ResourcePayoutEntry resourcePayoutEntry = payoutComponent.PayoutEntries[0];
+            Assert.NotNull(resourcePayoutEntry);
+            Assert.Equal("gold", resourcePayoutEntry.ResourceKey);
+            Assert.Equal(0, resourcePayoutEntry.ResourceID);
+            Assert.Equal(new BigNum(12.34), resourcePayoutEntry.Amount);
+
+            ResourceDefinition resourceDefinition = definitionManager.GetDefinition<ResourceDefinition>(0);
+            Assert.NotNull(resourceDefinition);
+            Assert.Equal("gold",resourceDefinition.Key);
+            Assert.Equal(0,resourceDefinition.Id);
+
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EconomyManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Events;
+using System.Runtime.CompilerServices;
+
+namespace xUnitTester.Managers {
+    public class EconomyManagerTests {
+        [Fact]
+        public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            const double AMMOUNT_TO_ADD = 100.50;
+            EventManager eventManager = new EventManager();
+            EconomyState economyState = new EconomyState();
+            economyState.Resources = new BigNum[1];
+            economyState.Resources[0] = new BigNum(0);
+
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
+
+            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
+            int goldId = 0;
+
+            eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
+
+            BigNum currentBalance = economyState.Resources[goldId];
+            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
+            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
+            
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EventManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace xUnitTester.Managers {
+    public class EventManagerTests {
+        private bool _heard = false;
+        private void TestBroadcast(UpdateLogicEvent e) {
+            _heard = true;
+        }
+        [Fact]
+        public void EventManager_WorksInTests() {
+            EventManager eventManager = new EventManager();
+            _heard = false;
+            eventManager.Subscribe<UpdateLogicEvent>(TestBroadcast);
+            eventManager.Publish<UpdateLogicEvent>(new UpdateLogicEvent());
+            Assert.True(_heard, "The event manager cant heard its own broadcast");
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\JobManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Definitions.Blueprints;
+
+namespace xUnitTester.Managers {
+    
+    public class JobManagerTests {
+        private bool _eventFired = false;
+        private void OnResourceGained(ResourceGainedEvent e) {
+            _eventFired = true;
+        }
+        private void JobCompleted(JobCompleted e) {
+            _eventFired = true;
+        }
+        [Fact]
+        public void JobManager_Update_CompletesJob_WhenTicksReached() {
+            
+            EventManager eventManager = new EventManager();
+            JobState jobState = new JobState();
+            jobState.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
+            jobState.Ticks = new BigNum(99);
+            _eventFired = false;
+            jobState.ActiveJobId = 0;
+            eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(0), jobState.Ticks);
+            Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
+        }
+        [Fact]
+        public void Prove_Type_Consistency() {
+            // Type used by the Test
+            Type testType = typeof(UpdateLogicEvent);
+
+            // Type used by the Core
+            Type coreType = typeof(ProjWizInc.Core.Events.UpdateLogicEvent);
+
+            // If this assertion fails, you have a duplicate file causing an assembly mismatch!
+            Assert.Equal(coreType.AssemblyQualifiedName, testType.AssemblyQualifiedName);
+        }
+        [Fact]
+        public void JobManager_ManualComplete_PublishesEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            _eventFired = false;
+            eventManager.Subscribe<JobCompleted>(JobCompleted);
+            jobManager.CompleteJob();
+            Assert.True(_eventFired, "CompleteJob() was called, but no event was published");
+        }
+        [Fact]
+        public void JobManager_CachesStateOnConstruction() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            Assert.NotNull(jobDefinition);
+            Assert.Equal(2, jobDefinition.Components.Count);
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            Assert.NotNull(state.JobTicksRequired);
+            Assert.NotNull(state.JobPayout);
+        }
+        [Fact]
+        public void JobManager_IncrementsTicks_OnUpdateEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, state,definitionManager);
+            state.Ticks = new BigNum(50);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(51), state.Ticks);
+        }
+        [Fact]
+        public void JobManager_ContinuesLoopingAfterCompletion_WhenSameJobSelected() {
+
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\TimeManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+
+
+
+
+namespace xUnitTester.Managers {
+    public class TimeManagerTests {
+        [Fact]
+        public void TimeManager_StartsAtZero() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+            TimeManager timeManager = new TimeManager(eventManager,timeState);
+            Assert.Equal(0, timeManager.GetTime());
+            Assert.Equal(0, timeManager.State.TicksElapsed);
+        }
+        [Fact]
+        public void TimeManager_IncrementsTicks_OnUpdateEvent() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(1, timeManager.State.TicksElapsed);
+            Assert.Equal(0, timeManager.GetTime());
+        }
+        [Fact]
+        public void TimeManager_TicksRolloverToSeconds_AtTpsThreshold() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+
+            // Publish exactly the number of ticks required for 1 second (100 ticks)
+            int ticksNeeded = Globals.LOGIC_TPS;
+            for (int i = 0; i < ticksNeeded; i++) {
+                eventManager.Publish(new UpdateLogicEvent());
+            }
+
+            // Ticks should reset back to 0, and TimeElapsed should increment to 1
+            Assert.Equal(0, timeManager.State.TicksElapsed);
+            Assert.Equal(1, timeManager.State.TimeElapsed);
+            Assert.Equal(1, timeManager.GetTime());
+        }
+    }
+}
+
+

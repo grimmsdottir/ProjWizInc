@@ -1,0 +1,608 @@
+﻿==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using static System.Reflection.Metadata.BlobBuilder;
+
+namespace ProjWizInc.Core.Managers {
+    
+    public class JobManager {
+        private readonly EventManager _events;
+        private readonly JobState _state;
+        private readonly DefinitionManager _defs;
+        //we use -1 like null basically, if its -1 that means that nothings active
+        public JobManager(EventManager events, JobState state, DefinitionManager definitionManager) {
+            _events = events;
+            _defs = definitionManager;
+            _state = state;
+            if (_state.ActiveJobId != -1) {
+                CacheState(_state.ActiveJobId);
+            }
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public JobState State => _state;
+        public void ToggleJob(int jobId) {
+            //basically if we click the current job, it just stops it, but if we click something else, we 
+            //move to that one instead
+            if (_state.ActiveJobId == jobId) {
+                _state.Reset();
+            } else {
+                CacheState(jobId);
+            }            
+        }
+        private void CacheState(int jobId) {
+            _state.Reset();
+            if (jobId < 0) {
+                //todo: log and complain about illegal arguement
+                return;
+            } else {
+                _state.ActiveJobId = jobId;
+                _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
+                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent<RequiresTicksComponent>();
+                _state.Ticks = 0;
+                _state.JobPayout = _state.ActiveJobDef.GetComponent<PayoutComponent>();
+            }
+        }
+        public void Update(UpdateLogicEvent e) {
+            if (_state.ActiveJobId == -1) { return; }
+            if (_state.JobTicksRequired != null) {
+                _state.Ticks++;
+                if (_state.Ticks >= _state.JobTicksRequired.RequiredTicks) {
+                    _state.Ticks -= _state.JobTicksRequired.RequiredTicks;
+                    CompleteJob();
+                }
+            }
+        }
+        public void CompleteJob() {
+            if (_state.JobPayout != null) {
+                foreach (ResourcePayoutEntry entry in _state.JobPayout.PayoutEntries) {
+                    int id = entry.ResourceID;
+                    BigNum amount = entry.Amount;
+                    _events.Publish(new ResourceGainedEvent(id,amount));
+                }
+            }
+            _events.Publish(new JobCompleted(_state.ActiveJobId));
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs
+==============================================================================
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    
+    public class TimeManager {
+        private readonly EventManager _events;
+        private readonly TimeState _state;
+        public TimeState State => _state;
+
+        public TimeManager(EventManager events, TimeState timeState) {
+            _events = events;
+            _state = timeState;
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public long GetTime() {
+            return _state.TimeElapsed;
+        }
+        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
+        //but if we change UpdateFrameEvent with parameters later, we can check it with e
+        public void Update(UpdateLogicEvent e) {
+            AdvanceTick();
+        }
+        private void AdvanceTick() {
+            _state.TicksElapsed++;
+            if (_state.TicksElapsed >= Globals.LOGIC_TPS) {
+                _state.TicksElapsed -= Globals.LOGIC_TPS;
+                _state.TimeElapsed++;
+            }
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\BigNumJsonConverter.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Persistence {
+    public class BigNumJsonConverter : JsonConverter<BigNum> {
+        public override BigNum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+            // Try reading as string (scientific/large) or number (small)
+            if (reader.TokenType == JsonTokenType.String)
+                return BigNum.Parse(reader.GetString()!);
+
+            if (reader.TokenType == JsonTokenType.Number)
+                return new BigNum(reader.GetDouble());
+            //not sure if we should throw an exception here or something 
+            return new BigNum(0);
+        }
+        public override void Write(Utf8JsonWriter writer, BigNum value, JsonSerializerOptions options) {
+            // Always write as string to maintain precision
+            writer.WriteStringValue(value.ToScientific(false));
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\SerialisationService.cs
+==============================================================================
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Persistence {
+    /*
+     * this class serves a sort of helper or translator.
+     * because we use polymorphism, a custom ADT and other future funky stuff, we want to clarify the rules here
+     */
+    public class SerialisationService {
+        private readonly JsonSerializerOptions _options;
+        public SerialisationService() {
+            _options = new JsonSerializerOptions {
+                WriteIndented = true,
+                PropertyNameCaseInsensitive = true,
+                //TODO hook up bignum converter
+            };
+            _options.Converters.Add(new BigNumJsonConverter());
+        }
+        //generic load for definitions, whatever that means
+        public T? Load<T>(string filePath) {
+            if (!File.Exists(filePath)) return default;
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<T>(json, _options);
+        }
+        /*
+        // Save the entire GameState (Memory)
+        public void SaveState(string filePath, GameState state) {
+            string json = JsonSerializer.Serialize(state, _options);
+            File.WriteAllText(filePath, json);
+        }
+
+        // Load the entire GameState (Memory)
+        public GameState? LoadState(string filePath) {
+            if (!File.Exists(filePath)) return null;
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<GameState>(json, _options);
+        }
+        */
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\GameState.cs
+==============================================================================
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States {
+    /* 
+     * Despite how important GameState will be, it is ultimately just a box of boxes
+     */
+    public class GameState {
+        public EconomyState economyState { get; set; } = new();
+        public JobState jobState { get; set; } = new();
+        public TimeState timeState { get; set; } = new();
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\EconomyState.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class EconomyState {
+        //changed the dictionary to using ints instead of strings for faster searching
+        public BigNum[]? Resources { get; set; }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\JobState.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class JobState {
+        public int ActiveJobId { get; set; } = -1;
+        //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
+        public JobDefinition? ActiveJobDef { get; set; } = null;
+        //we also keep a cache of any components and their state vars like ticks and xp
+        public RequiresTicksComponent? JobTicksRequired { get; set; } = null;
+        public BigNum Ticks { get; set; } = 0;
+        public PayoutComponent? JobPayout { get; set; } = null;
+        //a handy reset function for nulling everything
+        public void Reset() {
+            ActiveJobId = -1;
+            ActiveJobDef = null;
+            JobTicksRequired = null;
+            Ticks = 0;
+            JobPayout = null;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\TimeState.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class TimeState {
+        //TODO:use minutes/hours/days to store time, maybe its own ADT
+        public long TimeElapsed;
+        public int TicksElapsed;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
+using System.Diagnostics;
+
+namespace ProjWizInc.WinForms
+{
+    public partial class Form1 : Form {
+        private readonly ContextManager _context;
+
+        public Form1() {
+            InitializeComponent();
+            _context = ContextManager.Instance;
+            _context.Subscribe<UpdateRenderEvent>(UpdateUI);
+            _context.Start();
+        }
+        protected override void OnLoad(EventArgs e) {
+            base.OnLoad(e);
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) {
+            base.OnFormClosed(e);
+            _context.Unsubscribe<UpdateRenderEvent>(UpdateUI);
+        }
+        private void UpdateUI(UpdateRenderEvent e) {
+            // Check if we need to marshal to the UI thread
+            if (labelTimer.InvokeRequired) {
+                labelTimer.BeginInvoke(() => UpdateUI(e));
+                return;
+            }
+            long time = 0;
+            labelTimer.Text = "Time: " + time;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs
+==============================================================================
+namespace ProjWizInc.WinForms
+{
+    partial class Form1
+    {
+        /// <summary>
+        ///  Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        ///  Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        ///  Required method for Designer support - do not modify
+        ///  the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent() {
+            labelTimer = new Label();
+            button1 = new Button();
+            button2 = new Button();
+            progressBar1 = new ProgressBar();
+            progressBar2 = new ProgressBar();
+            labelGold = new Label();
+            SuspendLayout();
+            // 
+            // labelTimer
+            // 
+            labelTimer.AutoSize = true;
+            labelTimer.Location = new Point(67, 40);
+            labelTimer.Name = "labelTimer";
+            labelTimer.Size = new Size(57, 20);
+            labelTimer.TabIndex = 0;
+            labelTimer.Text = "Time: 0";
+            // 
+            // button1
+            // 
+            button1.Location = new Point(82, 160);
+            button1.Name = "button1";
+            button1.Size = new Size(94, 29);
+            button1.TabIndex = 1;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(82, 195);
+            button2.Name = "button2";
+            button2.Size = new Size(94, 29);
+            button2.TabIndex = 2;
+            button2.Text = "button2";
+            button2.UseVisualStyleBackColor = true;
+            // 
+            // progressBar1
+            // 
+            progressBar1.Location = new Point(182, 160);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(125, 29);
+            progressBar1.TabIndex = 3;
+            // 
+            // progressBar2
+            // 
+            progressBar2.Location = new Point(182, 195);
+            progressBar2.Name = "progressBar2";
+            progressBar2.Size = new Size(125, 29);
+            progressBar2.TabIndex = 4;
+            // 
+            // labelGold
+            // 
+            labelGold.AutoSize = true;
+            labelGold.Location = new Point(67, 60);
+            labelGold.Name = "labelGold";
+            labelGold.Size = new Size(44, 20);
+            labelGold.TabIndex = 5;
+            labelGold.Text = "Gold:";
+            // 
+            // Form1
+            // 
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(800, 450);
+            Controls.Add(labelGold);
+            Controls.Add(progressBar2);
+            Controls.Add(progressBar1);
+            Controls.Add(button2);
+            Controls.Add(button1);
+            Controls.Add(labelTimer);
+            Name = "Form1";
+            Text = "Form1";
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        private Label labelTimer;
+        private Button button1;
+        private Button button2;
+        private ProgressBar progressBar1;
+        private ProgressBar progressBar2;
+        private Label labelGold;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs
+==============================================================================
+namespace ProjWizInc.WinForms
+{
+    internal static class Program
+    {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            // To customize application configuration such as set high DPI settings or default font,
+            // see https://aka.ms/applicationconfiguration.
+            ApplicationConfiguration.Initialize();
+
+            Application.Run(new Form1());
+        }
+    }
+}
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Threading;
+
+namespace Testertron {
+    internal class Program {
+        private static CoreContext _context = null!;
+        private static bool _running = true;
+
+        public static void Main(string[] args) {
+            // 1. Boot the core context (This loads the split JSON files from bin/Debug/net8.0/defs/)
+            _context = Bootstrapper.BuildContext();
+
+            // 2. Subscribe to the render frame (the 30 PPS pulse) to redraw the screen
+            _context.Subscribe<UpdateRenderEvent>(OnRenderPulse);
+
+            // 3. Start the asynchronous background tick loops
+            _context.Start();
+
+            // Hide the terminal cursor to prevent blinking visual artifacts
+            Console.CursorVisible = false;
+            Console.Clear();
+
+            // 4. Main Non-Blocking Input Loop
+            while (_running) {
+                // Check if a key was pressed without blocking the thread
+                if (Console.KeyAvailable) {
+                    ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                    ProcessInput(keyInfo);
+                }
+
+                // Yield the CPU slightly (sleep 50ms) to keep CPU core usage near 0%
+                Thread.Sleep(50);
+            }
+
+            // Cleanup on termination
+            _context.Unsubscribe<UpdateRenderEvent>(OnRenderPulse);
+            Console.CursorVisible = true;
+            Console.Clear();
+            Console.WriteLine("Headless engine terminated cleanly.");
+        }
+
+        private static void OnRenderPulse(UpdateRenderEvent e) {
+            // Resets the draw cursor to the top-left corner instead of clearing the screen.
+            // This achieves standard, flicker-free rendering inside the console.
+            Console.SetCursorPosition(0, 0);
+
+            long time = _context.GetTimeState().TimeElapsed;
+            Console.WriteLine("==================================================");
+            Console.WriteLine("         PROJECT WIZARD INCREMENTAL - TERMINAL    ");
+            Console.WriteLine("==================================================");
+            Console.WriteLine(" Time Elapsed: " + time.ToString() + "s");
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Resources
+            Console.WriteLine(" INVENTORY:");
+            int resourceCount = _context.GetResourceCount();
+            for (int i = 0; i < resourceCount; i++) {
+                ResourceDefinition def = _context.GetResourceDefinition(i);
+                BigNum amount = _context.GetResourceAmount(i);
+                Console.WriteLine("  - " + def.DisplayName + ": " + amount.ToString());
+            }
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Jobs
+            Console.WriteLine(" AVAILABLE TASKS:");
+            int jobCount = _context.GetJobCount();
+            JobState jobState = _context.GetJobState();
+            int activeJobId = jobState.ActiveJobId;
+
+            for (int i = 0; i < jobCount; i++) {
+                JobDefinition def = _context.GetJobDefinition(i);
+                string status = "Idle  ";
+                string progress = "0%  ";
+
+                if (i == activeJobId) {
+                    status = "ACTIVE";
+                    if (jobState.JobTicksRequired != null) {
+                        double current = 0.0;
+                        double required = 1.0;
+
+                        // Parse BigNum limits into doubles for display percentage
+                        if (!jobState.Ticks.IsLarge) {
+                            current = jobState.Ticks.Small;
+                        } else {
+                            current = jobState.Ticks.Man * Math.Pow(10, jobState.Ticks.Exp);
+                        }
+
+                        if (!jobState.JobTicksRequired.RequiredTicks.IsLarge) {
+                            required = jobState.JobTicksRequired.RequiredTicks.Small;
+                        } else {
+                            required = jobState.JobTicksRequired.RequiredTicks.Man * Math.Pow(10, jobState.JobTicksRequired.RequiredTicks.Exp);
+                        }
+
+                        double ratio = current / required;
+                        progress = ((int)(ratio * 100)).ToString() + "%   ";
+                    }
+                }
+
+                Console.WriteLine("  [" + (i + 1).ToString() + "] " + def.DisplayName.PadRight(15) + " (" + status + ") - Progress: " + progress);
+            }
+            Console.WriteLine("--------------------------------------------------");
+            Console.WriteLine(" Controls: Press [1], [2], [3] to Toggle Jobs.    ");
+            Console.WriteLine("           Press [Q] to Quit.                     ");
+            Console.WriteLine("==================================================");
+        }
+
+        private static void ProcessInput(ConsoleKeyInfo keyInfo) {
+            char keyChar = keyInfo.KeyChar;
+
+            if (keyChar == 'q' || keyChar == 'Q') {
+                _running = false;
+            } else if (keyChar == '1') {
+                _context.ToggleJob(0);
+            } else if (keyChar == '2') {
+                _context.ToggleJob(1);
+            } else if (keyChar == '3') {
+                _context.ToggleJob(2);
+            }
+        }
+    }
+}
+

@@ -1,0 +1,654 @@
+﻿==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\IEntryInterface.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public interface IEntryInterface {
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\ILinkableDefinitionInterface.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public interface ILinkableDefinitionInterface {
+        void ResolveLinks(DefinitionManager manager);
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\PayoutComponent.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using System.Resources;
+using System.Text.Json.Serialization;
+
+namespace ProjWizInc.Core.Definitions.Components {
+    
+    public class PayoutComponent : IDefinitionComponentInterface, ILinkableDefinitionInterface {
+        public List<ResourcePayoutEntry> PayoutEntries { get; internal set; } = [];
+        public void ResolveLinks(DefinitionManager manager) {
+            foreach (ResourcePayoutEntry entry in PayoutEntries) {
+                entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
+            }   
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\RequiresTicksComponent.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Components {
+    
+    public class RequiresTicksComponent : IDefinitionComponentInterface {
+        public BigNum RequiredTicks { get; set; } = 1000;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Entries\ResourcePayoutEntry.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Entries {
+    public class ResourcePayoutEntry : IEntryInterface {
+        public string ResourceKey { get; set; }
+        public BigNum Amount { get; set; }
+        //we ignore resourceIDs because it is generated on bootup and not important
+        [JsonIgnore]
+        public int ResourceID { get; set; }
+
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Events {
+    public readonly record struct UpdateRenderEvent();
+    public readonly record struct UpdateLogicEvent();
+    public readonly record struct AppStartedEvent(string Message);
+    public readonly record struct GameStartedEvent();
+    public readonly record struct TimeAdvancedEvent(long CurrentTime);
+    public readonly record struct ResourceGainedEvent(int Id, BigNum Amount);
+    public readonly record struct JobCompleted(int Id);
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Persistence;
+using ProjWizInc.Core.States;
+using ProjWizInc.Core.States.Managers;
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    /*
+     * this class exists to create the ContextManager and all the other managers, so that we dont have
+     * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
+     */
+    public class Bootstrapper {
+        public const string DEFS_DIRECTORY = "defs";
+        //we split out BuildContext into 2, one for "proper" booting from file etc, and another which
+        //can boot using specially provided defs and save for testing purposes
+        public static CoreContext BuildContext() {
+            SerialisationService serialiser = new SerialisationService();
+            GameState gameState = new GameState();
+            GameDefinitions masterDefinitions = new GameDefinitions();
+
+            if (Directory.Exists(DEFS_DIRECTORY)) {
+                string[] jsonFiles = Directory.GetFiles(DEFS_DIRECTORY, "*.json", SearchOption.AllDirectories);
+
+                // Cache GameDefinitions properties once before entering the loop
+                System.Reflection.PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
+
+                for (int i = 0; i < jsonFiles.Length; i++) {
+                    string filePath = jsonFiles[i];
+                    GameDefinitions partialDefinitions = serialiser.Load<GameDefinitions>(filePath);
+
+                    if (partialDefinitions != null) {
+                        // Dynamically merge lists for any List<T> properties found
+                        for (int p = 0; p < properties.Length; p++) {
+                            System.Reflection.PropertyInfo prop = properties[p];
+
+                            // Verify if the property represents a generic list
+                            if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
+                                System.Collections.IList partialList = (System.Collections.IList)prop.GetValue(partialDefinitions);
+                                System.Collections.IList masterList = (System.Collections.IList)prop.GetValue(masterDefinitions);
+
+                                if (partialList != null && masterList != null) {
+                                    for (int itemIndex = 0; itemIndex < partialList.Count; itemIndex++) {
+                                        masterList.Add(partialList[itemIndex]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Directory.CreateDirectory(DEFS_DIRECTORY);
+            }
+
+            // 1. Build DefinitionManager first to serve as the ID and count authority
+            DefinitionManager definitionManager = BuildDefinitionManager(masterDefinitions);
+
+            // 2. HYDRATE AND ALLOCATE SAVE STATE ARRAYS BEFORE CONTEXT AND MANAGER CONSTRUCTION
+            if (gameState.economyState.Resources == null) {
+                int resourceCount = definitionManager.GetDefCount<ResourceDefinition>();
+                gameState.economyState.Resources = new BigNum[resourceCount];
+
+                for (int i = 0; i < resourceCount; i++) {
+                    gameState.economyState.Resources[i] = new BigNum(0);
+                }
+            }
+
+            // 3. Pass the fully initialized, non-null gameState to compile the service manager graph
+            CoreContext context = BuildContext(masterDefinitions, gameState);
+
+            return context;
+        }
+
+        public static CoreContext BuildContext(GameDefinitions rawData, GameState gameState) {
+            //now we slice up the GameState into slices to pass to the managers
+            EconomyState economyState = gameState.economyState;
+            JobState jobState = gameState.jobState;
+            TimeState timeState = gameState.timeState;
+            //special managers that need to be initialised first
+            EventManager eventManager = new EventManager();
+            //the definition manager is so special it gets its own section lol
+            DefinitionManager definitionManager = BuildDefinitionManager(rawData);
+            ResolveDictionaryLinks(definitionManager);
+            //construct basic managers
+            EconomyManager economyManager = new EconomyManager(eventManager, economyState);
+            GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
+            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+            return new CoreContext(
+                definitionManager,
+                eventManager,
+                economyManager,
+                gameLoopManager,
+                jobManager,
+                timeManager
+                );
+        }
+        private static void ResolveDictionaryLinks(DefinitionManager definitionManager) {
+            IEnumerable<Array> allTypeIdDefMaps = definitionManager.GetAllDefinitions();
+            //so this enumarates over each Type in the typeIdDefMap
+            foreach (Array idDefMaps in allTypeIdDefMaps) { 
+                //we use object here because it could be resource or job or whatever, and T would be overkill
+                foreach (object item in idDefMaps) {
+                    if (item is DefinitionEntity entity) {
+                        foreach (IDefinitionComponentInterface component in entity.Components) {
+                            if (component is ILinkableDefinitionInterface linkable) {
+                                linkable.ResolveLinks(definitionManager);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //the definition manager is so chonky we split it out to here
+        private static DefinitionManager BuildDefinitionManager(GameDefinitions rawData) {
+            //first we read the json and get the GameDefinitions
+            
+            //then we create the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //then we fill the dictionaries
+            PopulateAllDictionaries(rawData, typeKeyIdMap, typeIdDefMap);
+            //we arent done yet, because we havent resolved links, but its good enough
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+        //wizardly reflection something magic, idk
+        private static void PopulateAllDictionaries(
+            GameDefinitions data,
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            // We look at every property in GameDefinitions (Resources, Jobs, etc.)
+            var properties = typeof(GameDefinitions).GetProperties();
+
+            foreach (var prop in properties) {
+                // Check if the property is a List<T> where T inherits from DefinitionBase
+                if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
+                    var listValue = prop.GetValue(data);
+                    if (listValue == null) continue;
+
+                    // Get the specific type (e.g., ResourceDefinition)
+                    var itemType = prop.PropertyType.GetGenericArguments()[0];
+
+                    // Use 'MakeGenericMethod' to call your PopulateRegistry<T> method dynamically
+                    var method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                    var genericMethod = method.MakeGenericMethod(itemType);
+
+                    genericMethod.Invoke(null, new object[] { listValue, typeKeyIdMap, typeIdDefMap });
+                }
+            }
+        }
+        /* this hecking thing is the definition buildertron, which is so complex, imma write this down here so i remember
+         * T - the type of definition, which will need to be hard coded, for each type of definition,
+         * like JobDefinition and Resource definition
+         * items - this will be the contents of GameDefinitions.SomeDefinition that we got from the json
+         * typeKeyIdMap - the name should be self evident, but its still a mindbender. so the key of the outer layer
+         * dict is the dynamic subtype of the definition, so gold, wood etc in ResourceDefinitions, the the value is
+         * another hecking dict, which maps strings to in, so the "gold" in .json gets translated to a number
+         * typeIdDef - like above the outer layer is the same, but the inner layer is an array of actual definitions
+         * so like the gold definition with all its components and name etc
+         * we go through this song and dance so that when somebody wants a definition, they just give a number and 
+         * we can give it them just like that
+         * for the front end and for linking, they dont know the number of the thing, they only have the string of the 
+         * thing, so thats what the first dictionary is for, which they use to peruse the second dictionary
+         * also because of glorious pass by reference, we only need to init the outer dictionaries once and pass it
+         */
+        private static void PopulateDictionaries<T>(
+            List<T> items,
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) where T : DefinitionBase {
+            var idDefMap = new T[items.Count];
+            var keyIdMap = new Dictionary<string, int>();
+            //so first we prepare the inner dict/array
+            for (int i = 0; i < items.Count; i++) {
+                items[i].Id = i;
+                keyIdMap[items[i].Key] = i;
+                idDefMap[i] = items[i];
+            }
+            //then we stock the outer dict
+            typeKeyIdMap[typeof(T)] = keyIdMap;
+            typeIdDefMap[typeof(T)] = idDefMap;
+        }
+        
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\CoreContext.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+    public class CoreContext {
+        //our special managers
+        private readonly EventManager _event;
+        private readonly DefinitionManager _defs;
+        //our normal managers
+        private readonly EconomyManager _economy;
+        private readonly GameLoopManager _gameLoop;
+        private readonly JobManager _jobs;
+        private readonly TimeManager _time;
+        //we arrange our managers alphabetically, and specials first
+        internal EventManager EventManager => _event;
+        internal DefinitionManager DefinitionManager => _defs;
+        internal EconomyManager EconomyManager => _economy;
+        internal GameLoopManager GameLoopManager => _gameLoop;
+        internal JobManager JobManager => _jobs;
+        internal TimeManager TimeManager => _time;
+
+        public CoreContext(
+            DefinitionManager definitionManager,
+            EventManager eventManager,
+            EconomyManager economyManager,
+            GameLoopManager gameLoopManager,
+            JobManager jobManager,
+            TimeManager timeManger
+            ) {
+
+            _defs = definitionManager; 
+            _event = eventManager;
+            _economy = economyManager;
+            _gameLoop = gameLoopManager;
+            _jobs = jobManager;
+            _time = timeManger;
+        }
+        public void Start() {
+            _gameLoop.Start();
+        }
+        public void Subscribe<T>(Action<T> handler) {
+            _event.Subscribe(handler);
+        }
+        public void Unsubscribe<T>(Action<T> handler) {
+            _event.Unsubscribe(handler);
+        }
+        public void Publish<T>(T eventArgs) {
+            _event.Publish(eventArgs);
+        }
+        internal T GetDefinition<T>(int id) where T : DefinitionBase {
+            return _defs.GetDefinition<T>(id);
+        }
+        internal int GetDefinitionCount<T>() where T : DefinitionBase {
+            // Simply forward the request to the actual manager
+            return _defs.GetDefCount<T>();
+        }
+        public int GetResourceCount() {
+            return _defs.GetDefCount<ResourceDefinition>();
+        }
+        public int GetJobCount() {
+            return _defs.GetDefCount<JobDefinition>();
+        }
+
+        public ResourceDefinition GetResourceDefinition(int id) {
+            return _defs.GetDefinition<ResourceDefinition>(id);
+        }
+
+        public JobDefinition GetJobDefinition(int id) {
+            return _defs.GetDefinition<JobDefinition>(id);
+        }
+
+        public BigNum GetResourceAmount(int id) {
+            return _economy.GetResource(id);
+        }
+
+        public void ToggleJob(int id) {
+            _jobs.ToggleJob(id);
+        }
+
+        public JobState GetJobState() {
+            return _jobs.State;
+        }
+        public TimeState GetTimeState() {
+            return _time.State;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EconomyManager.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Resources;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Managers {
+
+    
+    public class EconomyManager{
+        private readonly EventManager _events;
+        private readonly EconomyState _state;
+        private readonly object _lock = new ();
+        public EconomyManager(EventManager events, EconomyState state) {
+            _state = state; ;
+            _events = events;
+            _events.Subscribe<UpdateLogicEvent>(Update);
+            _events.Subscribe<ResourceGainedEvent>(AddResource);
+        }
+        public EconomyState State => _state;
+        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
+        //but if we change UpdateFrameEvent with parameters later, we can check it with e
+        public void Update(UpdateLogicEvent e) {
+            
+        }
+        private void AddResource(ResourceGainedEvent e) {
+            lock (_lock) {
+                if (e.Id >= _state.Resources.Length) {
+                    throw new IndexOutOfRangeException("Attempted to access resource at index "+ e.Id+". There are" +
+                        "only "+_state.Resources.Length + " resource types");
+                }
+                _state.Resources[e.Id] += e.Amount;
+            }            
+        }
+        public BigNum GetResource(int resourceID) {
+            lock (_lock) {
+                if (resourceID >= _state.Resources.Length) {
+                    throw new IndexOutOfRangeException("Attempted to access resource at index " + resourceID + ". There are" +
+                        "only " + _state.Resources.Length + " resource types");
+                }
+                return _state.Resources[resourceID];
+            }
+           
+
+        }
+
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventManager.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+
+namespace ProjWizInc.Core.Managers {
+    /*
+     * So the way the EventBroker works is basically as a broker
+     * During bootup, Module A Subcribes to the EventBroker with an EventName and Function
+     * IE: The renderer subscribes "RenderFramePls", RenderFrame(), and waits
+     * During runtime, Module B publishes to the EventBroker with an EventName and Argument
+     * IE: The tick manager decides that it is time for the next frame to be rendered, and publishes
+     * "RenderFramePls",SomeData.
+     * The EventBroker then sees that "RenderFramePls" is in the subscriptions, and runs RenderFrame()
+     * TLDR: Subscription is "do thing if this event" and publishing is "this event happened"
+     *
+     * 2nd pass, now with funky typing instead of plain strings for event names
+     * our subscriptions are now based on Type and Delegate
+     * Type is typeOf(something), and Delegate is the parent of Action, because idk
+     * Also, upgraded to a singleton so we have global access to all events for everyone
+     * 
+     * 3rd pass, apparently using new 160 times a second causes problems for the GC, so we swap to an array instead
+     * it bypasses collection change errors by using an array. if any changes happen, the currently running publish
+     * will continue working with the old array, and use the new array next loop
+     */
+    public class EventManager{
+        private readonly Dictionary<Type, Delegate[]> _subscribers = [];
+        //we use this funky thing as a lock to make it thread safe and prevent race conditions
+        private readonly object _lock = new();
+        public void Subscribe<T>(Action<T> handler) {
+            var type = typeof(T);
+            lock (_lock) {
+                //like before, we check if the Event(type) already exists, and create it if it doesnt
+                if (!_subscribers.TryGetValue(type, out var oldArray)) {
+                    oldArray = Array.Empty<Delegate>();
+                }
+                //then we add a new Function(handler) used to be called callback
+                //but now in the 3rd pass, we aren using a list anymore, so we gotta do an old school manual array
+                //expansion
+                var newArr = new Delegate[oldArray.Length + 1];
+                Array.Copy(oldArray, newArr, oldArray.Length);
+                newArr[^1] = handler;
+                _subscribers[type] = newArr;
+                //this does have the old heap problem, but subs dont run 160hz
+            }
+
+        }
+        public void Unsubscribe<T>(Action<T> handler) {
+            var type = typeof(T);
+            lock (_lock) {
+                if (_subscribers.TryGetValue(type, out var oldArray)) {
+                    // Find where this handler lives in our array
+                    int index = Array.IndexOf(oldArray, handler);
+                    if (index >= 0) {
+                        // If it's the last subscriber standing, remove the event completely
+                        if (oldArray.Length == 1) {
+                            _subscribers.Remove(type);
+                        } else {
+                            // Otherwise, allocate a new array (-1 size) and skip the removed handler
+                            var newArray = new Delegate[oldArray.Length - 1];
+
+                            // Copy everything before the removed item
+                            if (index > 0) {
+                                Array.Copy(oldArray, 0, newArray, 0, index);
+                            }
+                            // Copy everything after the removed item
+                            if (index < oldArray.Length - 1) {
+                                Array.Copy(oldArray, index + 1, newArray, index, oldArray.Length - index - 1);
+                            }
+
+                            _subscribers[type] = newArray; // Atomic pointer swap
+                        }
+                    }
+                } else {
+                    // log if we tried to unsubscribe from something that was never subscribed
+                }
+            }
+            
+        }
+        public void Publish<T>(T eventArgs) {
+            Delegate[]? handlers;
+            lock (_lock) {
+                _subscribers.TryGetValue(typeof(T), out handlers);
+            }
+            // Iterates directly over the array for zero-allocation
+            if (handlers != null) {
+                foreach (var h in handlers) {
+                    ((Action<T>)h)(eventArgs);
+                }
+            }
+
+        }
+
+
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\GameLoopManager.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using static ProjWizInc.Core.Data.Globals;
+
+namespace ProjWizInc.Core.Managers {
+    
+    public class GameLoopManager {
+        
+        private double _timeAccumulator = 0;
+        private readonly Stopwatch _stopwatch;
+        //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
+        private CancellationTokenSource _cts;
+        private readonly EventManager _events;
+        public GameLoopManager(EventManager events) {
+            _stopwatch = new Stopwatch();
+            _events = events;
+
+        }
+        public void Start() {
+            //if it is not null, that means that the Manager has already started, so this stops duplicating runs
+            if (_cts != null) {
+                //todo: log it
+                return;
+            }
+            _cts = new CancellationTokenSource();
+            _stopwatch.Start();
+            //this one line kicks off the whole actual loop
+            Task.Run(() => RunLoopAsync(_cts.Token));
+        }
+        public void Init() {
+        }
+        public void Stop() {
+            //???
+            _cts?.Cancel();
+            _stopwatch.Stop();
+            _cts = null;
+        }
+        private async Task RunLoopAsync(CancellationToken token) {
+            //PeriodicTimer is another clock timer thing that is used for async and awaiting stuff
+            //less accurate than Stopwatch, but Stopwatch cant control CPU flow
+            //even though its less accurate, we dont need it to be super accurate because we have the accumalator
+            //to catch up to it and stuff
+            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(FRAME_LENGTH_MS));
+            while (!token.IsCancellationRequested && await periodicTimer.WaitForNextTickAsync(token)) {
+                double secondsPassed = _stopwatch.Elapsed.TotalSeconds;
+                _stopwatch.Restart();
+                //we cap the time passed so we dont melt the CPU with our CPU burst later
+                if (secondsPassed > 0.25) secondsPassed = 0.25;
+                _timeAccumulator += secondsPassed;
+                //this lets us decouple UPS from FPS, 
+                while (_timeAccumulator >= TICK_LENGTH) {
+                    LogicStep();
+                    _timeAccumulator -= TICK_LENGTH;
+                }
+                PresentationStep();
+            }
+        }
+        private void LogicStep() {
+            _events.Publish(new UpdateLogicEvent());
+        }
+        private void PresentationStep() {
+            _events.Publish(new UpdateRenderEvent());
+        }
+    }
+}
+
+

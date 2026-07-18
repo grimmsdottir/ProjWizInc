@@ -1,4 +1,5 @@
-﻿using ProjWizInc.Core.Definitions;
+﻿using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
 using ProjWizInc.Core.Definitions.Components;
@@ -19,12 +20,67 @@ namespace ProjWizInc.Core.Managers {
      * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
      */
     public class Bootstrapper {
-        public const string DEFINITIONS_FILEPATH = "defs.json";
+        public const string DEFS_DIRECTORY = "defs";
+        //we split out BuildContext into 2, one for "proper" booting from file etc, and another which
+        //can boot using specially provided defs and save for testing purposes
         public static CoreContext BuildContext() {
-            //read jsons
             SerialisationService serialiser = new SerialisationService();
-            //TODO: for now we just make a new state each time, but later on we should try to load a save file
             GameState gameState = new GameState();
+            GameDefinitions masterDefinitions = new GameDefinitions();
+
+            if (Directory.Exists(DEFS_DIRECTORY)) {
+                string[] jsonFiles = Directory.GetFiles(DEFS_DIRECTORY, "*.json", SearchOption.AllDirectories);
+
+                // Cache GameDefinitions properties once before entering the loop
+                System.Reflection.PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
+
+                for (int i = 0; i < jsonFiles.Length; i++) {
+                    string filePath = jsonFiles[i];
+                    GameDefinitions partialDefinitions = serialiser.Load<GameDefinitions>(filePath);
+
+                    if (partialDefinitions != null) {
+                        // Dynamically merge lists for any List<T> properties found
+                        for (int p = 0; p < properties.Length; p++) {
+                            System.Reflection.PropertyInfo prop = properties[p];
+
+                            // Verify if the property represents a generic list
+                            if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
+                                System.Collections.IList partialList = (System.Collections.IList)prop.GetValue(partialDefinitions);
+                                System.Collections.IList masterList = (System.Collections.IList)prop.GetValue(masterDefinitions);
+
+                                if (partialList != null && masterList != null) {
+                                    for (int itemIndex = 0; itemIndex < partialList.Count; itemIndex++) {
+                                        masterList.Add(partialList[itemIndex]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Directory.CreateDirectory(DEFS_DIRECTORY);
+            }
+
+            // 1. Build DefinitionManager first to serve as the ID and count authority
+            DefinitionManager definitionManager = BuildDefinitionManager(masterDefinitions);
+
+            // 2. HYDRATE AND ALLOCATE SAVE STATE ARRAYS BEFORE CONTEXT AND MANAGER CONSTRUCTION
+            if (gameState.economyState.Resources == null) {
+                int resourceCount = definitionManager.GetDefCount<ResourceDefinition>();
+                gameState.economyState.Resources = new BigNum[resourceCount];
+
+                for (int i = 0; i < resourceCount; i++) {
+                    gameState.economyState.Resources[i] = new BigNum(0);
+                }
+            }
+
+            // 3. Pass the fully initialized, non-null gameState to compile the service manager graph
+            CoreContext context = BuildContext(masterDefinitions, gameState);
+
+            return context;
+        }
+
+        public static CoreContext BuildContext(GameDefinitions rawData, GameState gameState) {
             //now we slice up the GameState into slices to pass to the managers
             EconomyState economyState = gameState.economyState;
             JobState jobState = gameState.jobState;
@@ -32,11 +88,10 @@ namespace ProjWizInc.Core.Managers {
             //special managers that need to be initialised first
             EventManager eventManager = new EventManager();
             //the definition manager is so special it gets its own section lol
-            GameDefinitions rawData = serialiser.Load<GameDefinitions>(DEFINITIONS_FILEPATH);
             DefinitionManager definitionManager = BuildDefinitionManager(rawData);
             ResolveDictionaryLinks(definitionManager);
             //construct basic managers
-            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
+            EconomyManager economyManager = new EconomyManager(eventManager, economyState);
             GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
             JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
             TimeManager timeManager = new TimeManager(eventManager, timeState);

@@ -5,6 +5,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using AvaloniaApplication1.ViewModels;
 using AvaloniaApplication1.Views;
+using ProjWizInc.Core.Managers;
 using System.Linq;
 
 namespace AvaloniaApplication1 {
@@ -15,8 +16,11 @@ namespace AvaloniaApplication1 {
 
         public override void OnFrameworkInitializationCompleted() {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
+                //create the engine
+                CoreContext context = Bootstrapper.BuildContext();
+                context.Start();
                 desktop.MainWindow = new MainWindow {
-                    DataContext = new MainWindowViewModel(),
+                    DataContext = new MainWindowViewModel(context),
                 };
             }
 

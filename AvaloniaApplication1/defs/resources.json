@@ -1,0 +1,16 @@
+{
+  "Resources": [
+    {
+      "Key": "gold",
+      "DisplayName": "Gold"
+    },
+    {
+      "Key": "wood",
+      "DisplayName": "Wood"
+    },
+    {
+      "Key": "stone",
+      "DisplayName": "Stone"
+    }
+  ]
+}

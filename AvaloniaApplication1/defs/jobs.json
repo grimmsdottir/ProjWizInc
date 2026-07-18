@@ -1,0 +1,61 @@
+{
+  "Jobs": [
+    {
+      "Key": "gather_wood",
+      "DisplayName": "Gather Wood",
+      "Components": [
+        {
+          "$type": "ticks",
+          "RequiredTicks": "100"
+        },
+        {
+          "$type": "payout",
+          "PayoutEntries": [
+            {
+              "ResourceKey": "wood",
+              "Amount": "2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Key": "mine_gold",
+      "DisplayName": "Mine Gold",
+      "Components": [
+        {
+          "$type": "ticks",
+          "RequiredTicks": "300"
+        },
+        {
+          "$type": "payout",
+          "PayoutEntries": [
+            {
+              "ResourceKey": "gold",
+              "Amount": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Key": "quarry_stone",
+      "DisplayName": "Quarry Stone",
+      "Components": [
+        {
+          "$type": "ticks",
+          "RequiredTicks": "200"
+        },
+        {
+          "$type": "payout",
+          "PayoutEntries": [
+            {
+              "ResourceKey": "stone",
+              "Amount": "3"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

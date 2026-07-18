@@ -3,72 +3,139 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection.Metadata;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.ADT {
+    // 1. Special states for division-by-zero or mathematical failures
+    public enum NumericState : byte {
+        Normal = 0,
+        NaN = 1,
+        PositiveInfinity = 2,
+        NegativeInfinity = 3
+    }
+    // Guarantees 8-byte sequential packing on the stack with zero alignment padding
+    [StructLayout(LayoutKind.Sequential, Pack = 8)]
     public readonly record struct BigNum {
-        private readonly double _small;
-        private readonly double _man;
-        private readonly long _exp;
-        private readonly bool _isLarge;
-        private readonly bool _isNegative;
-
-        private const long THRESHOLD = 1_000_000_000_000_000L; // 1e15
+        //special static array that holds all the powers of 10 from 10^-324 to 10^308, so we dont have to call Math.Pow every time we need a power of 10
+        private static readonly double[] PowersOf10;
+        private const int MIN_POWER = -324;
+        private const int MAX_POWER = 308;
+        private const int BIAS = 324; // Offsets negative index bounds to start at 0
+        //simplified constants for the threshold values, so we dont have to calculate them every time
+        private const double THRESHOLD_HIGH = 1_000_000_000_000_000; // 1e15
+        private const double THRESHOLD_LOW = 0.0001; //1e-4, we could use 1e-15, but visually 1e-4 is near the limit of human perception
         private const int THRESH_POW = 15;
         private const double EPSILON = 1e-15;
-
+        // === INSTANCE FIELDS (Ordered descending by size for optimal 24-byte stack footprint) ===
+        private readonly double _small;       // Offset 0  (8 bytes)
+        private readonly double _man;         // Offset 8  (8 bytes)
+        private readonly int _exp;            // Offset 16 (4 bytes) - Swapped to int
+        private readonly bool _isLarge;       // Offset 20 (1 byte)
+        private readonly bool _isNegative;    // Offset 21 (1 byte)
+        private readonly NumericState _state; // Offset 22 (1 byte)  - Exponent Special State
+        private readonly byte _towerLevel;    // Offset 23 (1 byte)  - Tetration Exponent Tower Level
+        static BigNum() {
+            //we need an array to hold all the powers of 10 from 10^-324 to 10^308, so we dont have to call Math.Pow every time we need a power of 10
+            PowersOf10 = new double[MAX_POWER - MIN_POWER + 1];
+            for (int i = MIN_POWER; i <= MAX_POWER; i++) {
+                int arrayIndex = i + BIAS;
+                PowersOf10[arrayIndex] = Math.Pow(10, i);
+            }
+        }
+        //our blessed O(1) power of 10 function, that uses the precomputed array to return the power of 10 in constant time
+        public static double GetPowerOf10(int power) {
+            if (power >= MIN_POWER && power <= MAX_POWER) {
+                return PowersOf10[power + BIAS];
+            }
+            // Fallback for extreme exponent cases (e.g. infinite scales)
+            return Math.Pow(10, power);
+        }
         //public getters
         public double Small => _small;
         public double Man => _man;
-        public long Exp => _exp;
+        public int Exp => _exp;
         public bool IsLarge => _isLarge;
         public bool IsNegative => _isNegative;
-        public BigNum(int value) : this((double)value,0) { }
-        public BigNum(long value) : this(value,0) { }
-        public BigNum(double value) : this(value, 0) { }
-        public BigNum(double man, long exp) {
-            //first we check if we are dumb enough to try passing in 0
-            if (man == 0) {
+        public BigNum() : this(0) { }
+        //int and long constructors are just wrappers for the double constructor, since they are all small numbers
+        public BigNum(int value) : this((double)value) { }
+        public BigNum(long value) : this((double)value) { }
+        //we now have a seperate constructor for double, that doesnt need to chain to the scientific constructor, since it can handle small numbers itself
+        public BigNum(double value) {
+            _isNegative = value < 0;
+            _state = NumericState.Normal;
+            _towerLevel = 0;
+            double absVal = Math.Abs(value);
+
+            if (value == 0) {
                 _man = 0;
                 _exp = 0;
                 _small = 0;
                 _isLarge = false;
                 return;
             }
-            //we check for the "internal exponent" like 150 should be 1.5e2
-            long intExp = (long)Math.Floor(Math.Log10(Math.Abs(man)));
-            //we pass along the internal exponent to the real exponent
-            exp += intExp;
-            //and we flatten the mantissa down to be >= 1 && <10
-            man /= Math.Pow(10, intExp);
-            //sometimes we might end up with funky mantissas remaining like 10.00000000001 
+
+            if (absVal > THRESHOLD_LOW && absVal < THRESHOLD_HIGH) {
+                _small = value;
+                _isLarge = false;
+                //TODO: is neccesary?
+                int intExp = (int)Math.Floor(Math.Log10(absVal));
+                _exp = intExp;
+                _man = value / GetPowerOf10((int)intExp);
+            } else {
+                _small = 0;
+                _isLarge = true;
+
+                int intExp = (int)Math.Floor(Math.Log10(absVal));
+                _exp = intExp;
+                _man = value / GetPowerOf10((int)intExp);
+            }
+        }
+        //the old constructor that takes in a mantissa and exponent, and normalizes it to be in the correct range
+        public BigNum(double man, int exp) {
+            _state = NumericState.Normal;
+            _towerLevel = 0;
+
+            if (man == 0) {
+                _man = 0;
+                _exp = 0;
+                _small = 0;
+                _isLarge = false;
+                _isNegative = false;
+                return;
+            }
+
+            // Calculate internal exponent of input mantissa
+            int intExp = (int)Math.Floor(Math.Log10(Math.Abs(man)));
+            exp = checked(exp + intExp); // Checked arithmetic prevents silent overflow
+            man /= GetPowerOf10(intExp);
+
+            // Handle representation edge cases
             if (Math.Abs(man) >= 10) {
                 man /= 10;
-                exp++;
+                exp = checked(exp + 1);
             }
-            //we dont need the funky old check, we can just check if the double is less than the threshold
-            //lastly we check if the resulting man-exp is actually small enough to fit in a long
-            double manExp = man * Math.Pow(10, exp);
-            //quick check if the number is negative
+
             _isNegative = man < 0;
-            if (manExp < THRESHOLD) {
-                //it can be a double
-                _small = manExp;
+
+            // Checked boundary check using integer comparisons
+            if (exp >= -4 && exp < 15) {
+                _small = man * GetPowerOf10(exp);
                 _isLarge = false;
             } else {
-                //its big enough to need the full man-exp
                 _small = 0;
                 _isLarge = true;
             }
-            //normal small long numbers dont need man or exp, but since this one came to us malformed
-            //we just leave it in in case its important
-            //regardless we will want to set the man and exp, so no need to repeat it twice below
+
             _man = man;
             _exp = exp;
         }
         public BigNum(String s) {
             BigNum val = Parse(s);
+            _state = NumericState.Normal;
+            _towerLevel = 0;
             _isLarge = val._isLarge;
             _small = val._small;
             _isNegative = val._isNegative;
@@ -76,7 +143,7 @@ namespace ProjWizInc.Core.ADT {
             _exp = val._exp;
         }
         public static BigNum operator +(BigNum a, BigNum b) {
-            if (a._isNegative != b._isNegative) { return a - b; }
+            if (a._isNegative != b._isNegative) { return a - (-b); }
             //small + small
             if (!a._isLarge && !b._isLarge) {
                 //if we add 2 smalls together, they can cross the boundry and overflow if we did a simple long sum
@@ -94,22 +161,24 @@ namespace ProjWizInc.Core.ADT {
             }
             //if either numbers are big, we have to do the slower operation
             //if a is small, we just use the small, otherwise we take their man and exp
-            var (man1, exp1) = a.GetParts();
-            var (man2, exp2) = b.GetParts();
+            double man1 = a.Man;
+            double man2 = b.Man;
+            int exp1 = a.Exp;
+            int exp2 = b.Exp;
             //ensure that a is smaller than b
             if (exp1 < exp2) {
                 double manTmp = man1;
-                long expTmp = exp1;
+                int expTmp = exp1;
                 man1 = man2;
                 exp1 = exp2;
                 man2 = manTmp;
                 exp2 = expTmp;
             }
-            long diff = exp1 - exp2;
+            int diff = checked(exp1 - exp2);
             if (diff > THRESH_POW) { 
                 return new BigNum(man1,exp1);
             } else {
-                return new BigNum(man1 + (man2 / Math.Pow(10, diff)), exp1);
+                return new BigNum(man1 + (man2 / GetPowerOf10((int)diff)), exp1);
             }
         }
         public static BigNum operator ++(BigNum a) {
@@ -117,46 +186,103 @@ namespace ProjWizInc.Core.ADT {
             return a + 1;
         }
         public static BigNum operator -(BigNum a, BigNum b) {
-            if (a._isNegative != b._isNegative) { return a + b; }
+            if (a._isNegative != b._isNegative) { return a + (-b); }
 
-            var (man1, exp1) = a.GetParts();
-            var (man2, exp2) = b.GetParts();
-            long diff = exp1 - exp2;
+            double man1 = a.Man;
+            double man2 = b.Man;
+            int exp1 = a.Exp;
+            int exp2 = b.Exp;
+            int diff = checked( exp1 - exp2);
+            //if the difference is too big, we can just return the larger number, because the smaller number is negligible
             if (diff > THRESH_POW) { return a; }
-            return new BigNum(man1 - (man2 / Math.Pow(10, diff)), exp1);
+            //same with the other way around, if b is larger than a, we can just return b
+            if (diff < -THRESH_POW) { return b; }
+            return new BigNum(man1 - (man2 / GetPowerOf10(diff)), exp1);
         }
         public static BigNum operator --(BigNum a) {
             if (a._isLarge) { return a; }
             return a - 1;
         }
         public static BigNum operator *(BigNum a, BigNum b) {
-            var (man1, exp1) = a.GetParts();
-            var (man2, exp2) = b.GetParts();
-            return new BigNum(man1 * man2, exp1 + exp2);
+            double man1 = a.Man;
+            double man2 = b.Man;
+            int exp1 = a.Exp;
+            int exp2 = b.Exp;
+            return new BigNum(man1 * man2, checked(exp1 + exp2));
         }
         public static BigNum operator /(BigNum a, BigNum b) {
-            var (man1, exp1) = a.GetParts();
-            var (man2, exp2) = b.GetParts();
-            return new BigNum(man1 / man2, exp1 - exp2);
+            if (b.Equals(new BigNum(0))) {
+                throw new DivideByZeroException("Cannot divide BigNum by zero.");
+            }
+
+            double man1 = a.Man;
+            double man2 = b.Man;
+            int exp1 = a.Exp;
+            int exp2 = b.Exp;
+            return new BigNum(man1 / man2, checked(exp1 - exp2));
         }
-        private (double m, long e) GetParts() => _isLarge ? (_man, _exp) : (_small, 0);
+        public static BigNum operator %(BigNum a, BigNum b) {
+            if (b == new BigNum(0)) { throw new DivideByZeroException("Cannot modulo BigNum by zero"); }
+            //if both numbers are small, we can use good ol double modulo
+            if (!a.IsLarge && !b.IsLarge) {
+                return new BigNum((a.Small % b.Small));
+            }
+            //otherwise we have to do the slow scientific path
+            double man1 = a.Man;
+            double man2 = b.Man;
+            int exp1 = a.Exp;
+            int exp2 = b.Exp;
+            //same exponent means we can just do a regular modulo on the mantissas
+            if (exp1 == exp2) {
+                return new BigNum((man1 % man2), exp1);
+            }
+            //we use the math rule of if a < b, then a % b = a, so we just check the exponents and return the smaller one
+            if (exp1 < exp2) {
+                return a;
+            }
+            //now we come to the hard and slow path
+            int expDiff = checked(exp1 - exp2);
+            if (expDiff > THRESH_POW) {
+                //if the difference is too big, we can just return a, because a is smaller than b
+                return new BigNum(0);
+            }
+            // Scale the dividend mantissa to align exponents, then perform double modulo
+            double scaledManA = man1 * GetPowerOf10((int)expDiff);
+            double resultMan = scaledManA % man2;
+
+            return new BigNum(resultMan, exp2);
+        }
         //comparator section
         public static bool operator >(BigNum a, BigNum b) {
-            //if both a and b are small, we do a regular comparison
-            if (!a._isLarge && !b._isLarge) { 
+            // If both are small, perform fast hardware comparison
+            if (!a._isLarge && !b._isLarge) {
                 return a._small > b._small;
             }
-            long expA = a._exp; 
-            long expB = b._exp;
-            //for the most time, we just need to compare exponents
-            if (expA > expB) { return true; }
-            if (expA < expB) { return false; }
-            //if the code reached here, that means the exponents are equal, so we just compare mantissas
-            return a._man > b._man;
+
+            // 1. Mismatched Signs (Instant resolution)
+            if (a._isNegative != b._isNegative) {
+                return b._isNegative; // If b is negative, a must be positive, so a > b is true
+            }
+
+            // 2. Symmetrical Signs
+            int expA = a._exp;
+            int expB = b._exp;
+
+            if (!a._isNegative) {
+                // Both are Positive: larger exponent means larger number
+                if (expA > expB) { return true; }
+                if (expA < expB) { return false; }
+                return a._man > b._man;
+            } else {
+                // Both are Negative: larger exponent means smaller (more-negative) number
+                if (expA > expB) { return false; }
+                if (expA < expB) { return true; }
+                return a._man > b._man; // e.g. -1.5 * 10^20 > -2.0 * 10^20 is true
+            }
         }
+        //we do a logical delegation, since a < b is the same as b > a, we can just use the > operator to determine if a < b
         public static bool operator <(BigNum a, BigNum b) {
-            return !(a > b) && !(a==b);
-        
+            return b > a;
         }
         public static bool operator >=(BigNum a, BigNum b) {
            return (a > b) || (a == b);
@@ -164,8 +290,128 @@ namespace ProjWizInc.Core.ADT {
         public static bool operator <=(BigNum a, BigNum b) {
             return (a < b) || (a == b);
         }
+        //unary negation operator, that just flips the sign of the number
         public static BigNum operator -(BigNum a) {
-            return new BigNum(0) - a;
+            if (a._isLarge) {
+                return new BigNum(-a._man, a._exp);
+            }
+            return new BigNum(-a._small);
+        }
+        // Explicit cast to double: allows progress bars to read ratios seamlessly
+        public static explicit operator double(BigNum value) {
+            if (!value._isLarge) {
+                return value._small;
+            }
+            return value._man * GetPowerOf10((int)value._exp);
+        }
+        // Explicit cast to long: useful for standard integer operations
+        public static explicit operator long(BigNum value) {
+            if (!value._isLarge) {
+                return (long)value._small;
+            }
+
+            double doubleVal = value._man * GetPowerOf10((int)value._exp);
+            if (doubleVal >= long.MaxValue) {
+                return long.MaxValue;
+            }
+            if (doubleVal <= long.MinValue) {
+                return long.MinValue;
+            }
+            return (long)doubleVal;
+        }
+        // Explicit cast to int
+        public static explicit operator int(BigNum value) {
+            return ((int)value);
+        }
+        public static BigNum Abs(BigNum value) {
+            if (value._isLarge) {
+                return new BigNum(Math.Abs(value._man), value._exp);
+            }
+            return new BigNum(Math.Abs(value._small));
+        }
+
+        public static BigNum Max(BigNum a, BigNum b) {
+            if (a > b) {
+                return a;
+            }
+            return b;
+        }
+
+        public static BigNum Min(BigNum a, BigNum b) {
+            if (a < b) {
+                return a;
+            }
+            return b;
+        }
+
+        public static BigNum Clamp(BigNum value, BigNum min, BigNum max) {
+            if (value < min) {
+                return min;
+            }
+            if (value > max) {
+                return max;
+            }
+            return value;
+        }
+        public static BigNum Floor(BigNum value) {
+            if (!value._isLarge) {
+                return new BigNum(Math.Floor(value._small));
+            }
+            // For large values (>= 1e15), double-precision has already discarded
+            // any fractional decimal digits. It is already mathematically an integer.
+            return value;
+        }
+        //same as floor, at large scales, we can assume the number is already an integer, so we just return it as is
+        public static BigNum Ceiling(BigNum value) {
+            if (!value._isLarge) {
+                return new BigNum(Math.Ceiling(value._small));
+            }
+            return value;
+        }
+        public static BigNum Pow(BigNum baseVal, int power) {
+            if (power == 0) {
+                return new BigNum(1);
+            }
+            if (power == 1) {
+                return baseVal;
+            }
+            // Using the algebraic identity: (M * 10^E)^P = M^P * 10^(E * P)
+            double newMan = Math.Pow(baseVal.Man, power);
+            int newExp = baseVal.Exp * power;
+
+            return new BigNum(newMan, newExp);
+        }
+        public static BigNum Pow(BigNum baseVal, double power) {
+            if (power == 0.0) {
+                return new BigNum(1);
+            }
+            if (power == 1.0) {
+                return baseVal;
+            }
+            if (baseVal.Equals(new BigNum(0))) {
+                return new BigNum(0);
+            }
+            if (baseVal.IsNegative && Math.Floor(power) != power) {
+                throw new ArgumentException("Cannot raise a negative BigNum to a fractional power.");
+            }
+
+            // 1. Calculate the raw mantissa power: M^P
+            double newMan = Math.Pow(baseVal.Man, power);
+
+            // 2. Calculate E * P (resulting in a double)
+            double rawExp = baseVal.Exp * power;
+
+            // 3. Split rawExp into integer and fractional components
+            double expFloor = Math.Floor(rawExp);
+            int newExp = (int)expFloor;
+            double expFraction = rawExp - expFloor;
+
+            // 4. Multiply the fractional remainder back into the mantissa.
+            // 10^expFraction is guaranteed to be within [1, 10) because expFraction is within [0, 1)
+            newMan *= Math.Pow(10, expFraction);
+
+            // 5. Pass to our scientific constructor to normalize if newMan falls outside [1, 10)
+            return new BigNum(newMan, newExp);
         }
         /*
          * because BigNum is a struct, it uses Equals to operate ==, so this is not used
@@ -198,7 +444,7 @@ namespace ProjWizInc.Core.ADT {
                 string[] parts = s.Split(new[] { 'e', 'E' }, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length != 2) throw new FormatException("Invalid scientific notation format.");
 
-                return new BigNum(double.Parse(parts[0]), long.Parse(parts[1]));
+                return new BigNum(double.Parse(parts[0]), int.Parse(parts[1]));
             }
             //case 2: smaller decimals. as it is it just yeets fractionals and turns doubles to longs
             if (s.Contains('.')) {
@@ -209,8 +455,11 @@ namespace ProjWizInc.Core.ADT {
         }
         public override string ToString() {
             if (!_isLarge) {
-                // Force the invariant culture to guarantee a dot instead of a comma
-                return _small.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                // 1. Get the standard C# double string
+                string s = _small.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                // 2. THE FIX: If C# used a capital 'E', replace it with lowercase 'e'!
+                return s.Replace("E", "e");
             }
 
             // Explicitly format the double using InvariantCulture

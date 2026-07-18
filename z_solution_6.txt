@@ -1,408 +1,310 @@
 ﻿==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\TestHelpers.cs
-==============================================================================
-using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Blueprints;
-using ProjWizInc.Core.Definitions.Components;
-using ProjWizInc.Core.Definitions.Entries;
-using ProjWizInc.Core.ADT;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using ProjWizInc.Core.Definitions.Common;
-using ProjWizInc.Core.Managers;
-
-namespace xUnitTester {
-    public class TestHelpers {
-        public const string TEST_GOLD_KEY = "gold";
-        public const int TEST_GOLD_ID = 0;
-        public const string TEST_JOB_KEY = "mine";
-        public const int TEST_JOB_ID = 0;
-        public static readonly BigNum TEST_PAYOUT_AMOUNT = new BigNum(12.34);
-        public static readonly BigNum TEST_REQUIRED_TICKS = new BigNum(100);
-        public static ResourceDefinition CreateTestGoldResourceDefinition() {
-            ResourceDefinition testGold = new ResourceDefinition();
-            testGold.Key = TEST_GOLD_KEY;
-            testGold.Id = TEST_GOLD_ID;
-            return testGold;
-        }
-        public static ResourcePayoutEntry CreateTestPayoutEntry() {
-            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
-            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
-            testPayoutEntry.ResourceKey = testGold.Key;
-            testPayoutEntry.ResourceID = testGold.Id;
-            testPayoutEntry.Amount = TEST_PAYOUT_AMOUNT;
-            return testPayoutEntry;
-        }
-        public static PayoutComponent CreateTestPayoutComponent() {
-            PayoutComponent testPayoutComponent = new PayoutComponent();
-            testPayoutComponent.PayoutEntries.Add(CreateTestPayoutEntry());
-            return testPayoutComponent;
-        }
-        public static RequiresTicksComponent CreateTestTicksComponent() {
-            RequiresTicksComponent testTicksComponent = new RequiresTicksComponent();
-            testTicksComponent.RequiredTicks = TEST_REQUIRED_TICKS;
-            return testTicksComponent;
-        }
-        public static JobDefinition CreateTestJobDefinition() {
-            JobDefinition testJob = new JobDefinition();
-            testJob.Key = TEST_JOB_KEY;
-            testJob.Id = TEST_JOB_ID;
-            testJob.Components.Add(CreateTestPayoutComponent());
-            testJob.Components.Add(CreateTestTicksComponent());
-            return testJob;
-        }
-        public static IEnumerable<object[]> GetValidDefinitions() {
-            List<object[]> testData = new List<object[]>();
-
-            ResourceDefinition resourceDef = CreateTestGoldResourceDefinition();
-            testData.Add(new object[] { resourceDef });
-
-            JobDefinition jobDef = CreateTestJobDefinition();
-            testData.Add(new object[] { jobDef });
-
-            return testData;
-        }
-        [Theory]
-        [MemberData(nameof(GetValidDefinitions))]
-        public void TestDefinition_HasValidKeyAndId(DefinitionBase definition) {
-            DefinitionBase castedDef = definition;
-            Assert.NotEmpty(castedDef.Key);
-            Assert.True(castedDef.Id >= 0);
-        }
-        public static GameDefinitions CreateTestingGameDefinitions() {
-            GameDefinitions gameDefinitions = new GameDefinitions();
-            gameDefinitions.Resources.Add(CreateTestGoldResourceDefinition());
-            gameDefinitions.Jobs.Add(CreateTestJobDefinition());
-            return gameDefinitions;
-        }
-        [Fact]
-        public void CreateTestingGameDefinitions_CreatesValidDefinitions() {
-            GameDefinitions definitions = CreateTestingGameDefinitions();
-            Assert.NotNull(definitions);
-            Assert.NotEmpty(definitions.Resources);
-            Assert.NotEmpty(definitions.Jobs);
-            Assert.Equal(TEST_GOLD_KEY, definitions.Resources[0].Key);
-            Assert.Equal(TEST_JOB_KEY, definitions.Jobs[0].Key);
-        }
-        public static DefinitionManager CreateTestingDefinitionManager() {
-            BigNum AMOUNT = new BigNum(69.69);
-            //to build a DefinitionManager, we need a whole bunch of stuff
-            //first are the dicts
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
-            Dictionary<Type, Array> typeIdDefMap = [];
-            //manually create some testing definitions
-            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
-            //jobs are quite a bit more complex because of their components
-            JobDefinition testJob = CreateTestJobDefinition();
-
-            ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
-            resourceIdDefMap[0] = testGold;
-            Dictionary<string, int> resourceKeyIdMap= [];
-            resourceKeyIdMap.Add(testGold.Key, testGold.Id);
-            JobDefinition[] jobIdDefMap = new JobDefinition[1];
-            jobIdDefMap[0] = testJob;
-            Dictionary<string, int> jobKeyIdMap = [];
-            jobKeyIdMap.Add(testJob.Key, testJob.Id);
-
-            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
-            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
-
-            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
-            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
-
-            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
-        }
-        /*
-        public static JobManager CreateTestJobManager() {
-            JobManager testJobManager = new JobManager()
-        }
-        */
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\DefinitionManagerTests.cs
-==============================================================================
-using ProjWizInc.Core.Definitions;
-using xUnitTester;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ProjWizInc.Core.Definitions.Blueprints;
-using ProjWizInc.Core.Definitions.Components;
-using ProjWizInc.Core.Definitions.Entries;
-using ProjWizInc.Core.ADT;
-
-namespace xUnitTester.Managers {
-    public class DefinitionManagerTests {
-        [Fact]
-        public void TestHelpers_BuildsCorrectDefinitionManager() {
-            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
-            IReadOnlyDictionary<Type, Dictionary<string, int>> typeKeyIdMap = definitionManager.GetAllTypeKeyIdMaps();
-            IReadOnlyDictionary< Type, Array > typeIdDefMap = definitionManager.GetAllTypeIdDefMaps();
-            Assert.NotNull(typeKeyIdMap);
-            Assert.NotNull(typeIdDefMap);
-
-
-            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
-            //check if the jobdefinition is valid
-            Assert.NotNull(jobDefinition);
-            Assert.Equal("mine",jobDefinition.Key);
-            Assert.Equal(0, jobDefinition.Id);
-
-            PayoutComponent payoutComponent= jobDefinition.GetComponent<PayoutComponent>();
-            Assert.NotNull(payoutComponent);
-            Assert.NotNull(payoutComponent.PayoutEntries);
-            ResourcePayoutEntry resourcePayoutEntry = payoutComponent.PayoutEntries[0];
-            Assert.NotNull(resourcePayoutEntry);
-            Assert.Equal("gold", resourcePayoutEntry.ResourceKey);
-            Assert.Equal(0, resourcePayoutEntry.ResourceID);
-            Assert.Equal(new BigNum(12.34), resourcePayoutEntry.Amount);
-
-            ResourceDefinition resourceDefinition = definitionManager.GetDefinition<ResourceDefinition>(0);
-            Assert.NotNull(resourceDefinition);
-            Assert.Equal("gold",resourceDefinition.Key);
-            Assert.Equal(0,resourceDefinition.Id);
-
-        }
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EconomyManagerTests.cs
-==============================================================================
-using ProjWizInc.Core.Managers;
-using ProjWizInc.Core.States.Managers;
-using ProjWizInc.Core.ADT;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ProjWizInc.Core.Events;
-using System.Runtime.CompilerServices;
-
-namespace xUnitTester.Managers {
-    public class EconomyManagerTests {
-        [Fact]
-        public void AddResource_ViaEvent_UpdatesStateCorrectly() {
-            const double AMMOUNT_TO_ADD = 100.50;
-            EventManager eventManager = new EventManager();
-            EconomyState economyState = new EconomyState();
-            economyState.Resources = new BigNum[1];
-            economyState.Resources[0] = new BigNum(0);
-
-            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
-
-            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
-            int goldId = 0;
-
-            eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
-
-            BigNum currentBalance = economyState.Resources[goldId];
-            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
-            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
-            
-        }
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EventManagerTests.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs
 ==============================================================================
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using ProjWizInc.Core.States;
+using System.Diagnostics;
 
-namespace xUnitTester.Managers {
-    public class EventManagerTests {
-        private bool _heard = false;
-        private void TestBroadcast(UpdateLogicEvent e) {
-            _heard = true;
+namespace ProjWizInc.WinForms
+{
+    public partial class Form1 : Form {
+        private readonly ContextManager _context;
+
+        public Form1() {
+            InitializeComponent();
+            _context = ContextManager.Instance;
+            _context.Subscribe<UpdateRenderEvent>(UpdateUI);
+            _context.Start();
         }
-        [Fact]
-        public void EventManager_WorksInTests() {
-            EventManager eventManager = new EventManager();
-            _heard = false;
-            eventManager.Subscribe<UpdateLogicEvent>(TestBroadcast);
-            eventManager.Publish<UpdateLogicEvent>(new UpdateLogicEvent());
-            Assert.True(_heard, "The event manager cant heard its own broadcast");
+        protected override void OnLoad(EventArgs e) {
+            base.OnLoad(e);
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) {
+            base.OnFormClosed(e);
+            _context.Unsubscribe<UpdateRenderEvent>(UpdateUI);
+        }
+        private void UpdateUI(UpdateRenderEvent e) {
+            // Check if we need to marshal to the UI thread
+            if (labelTimer.InvokeRequired) {
+                labelTimer.BeginInvoke(() => UpdateUI(e));
+                return;
+            }
+            long time = 0;
+            labelTimer.Text = "Time: " + time;
         }
     }
 }
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\JobManagerTests.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs
 ==============================================================================
-using ProjWizInc.Core.Managers;
-using ProjWizInc.Core.States.Managers;
+namespace ProjWizInc.WinForms
+{
+    partial class Form1
+    {
+        /// <summary>
+        ///  Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        ///  Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        ///  Required method for Designer support - do not modify
+        ///  the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent() {
+            labelTimer = new Label();
+            button1 = new Button();
+            button2 = new Button();
+            progressBar1 = new ProgressBar();
+            progressBar2 = new ProgressBar();
+            labelGold = new Label();
+            SuspendLayout();
+            // 
+            // labelTimer
+            // 
+            labelTimer.AutoSize = true;
+            labelTimer.Location = new Point(67, 40);
+            labelTimer.Name = "labelTimer";
+            labelTimer.Size = new Size(57, 20);
+            labelTimer.TabIndex = 0;
+            labelTimer.Text = "Time: 0";
+            // 
+            // button1
+            // 
+            button1.Location = new Point(82, 160);
+            button1.Name = "button1";
+            button1.Size = new Size(94, 29);
+            button1.TabIndex = 1;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(82, 195);
+            button2.Name = "button2";
+            button2.Size = new Size(94, 29);
+            button2.TabIndex = 2;
+            button2.Text = "button2";
+            button2.UseVisualStyleBackColor = true;
+            // 
+            // progressBar1
+            // 
+            progressBar1.Location = new Point(182, 160);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(125, 29);
+            progressBar1.TabIndex = 3;
+            // 
+            // progressBar2
+            // 
+            progressBar2.Location = new Point(182, 195);
+            progressBar2.Name = "progressBar2";
+            progressBar2.Size = new Size(125, 29);
+            progressBar2.TabIndex = 4;
+            // 
+            // labelGold
+            // 
+            labelGold.AutoSize = true;
+            labelGold.Location = new Point(67, 60);
+            labelGold.Name = "labelGold";
+            labelGold.Size = new Size(44, 20);
+            labelGold.TabIndex = 5;
+            labelGold.Text = "Gold:";
+            // 
+            // Form1
+            // 
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(800, 450);
+            Controls.Add(labelGold);
+            Controls.Add(progressBar2);
+            Controls.Add(progressBar1);
+            Controls.Add(button2);
+            Controls.Add(button1);
+            Controls.Add(labelTimer);
+            Name = "Form1";
+            Text = "Form1";
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        private Label labelTimer;
+        private Button button1;
+        private Button button2;
+        private ProgressBar progressBar1;
+        private ProgressBar progressBar2;
+        private Label labelGold;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs
+==============================================================================
+namespace ProjWizInc.WinForms
+{
+    internal static class Program
+    {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            // To customize application configuration such as set high DPI settings or default font,
+            // see https://aka.ms/applicationconfiguration.
+            ApplicationConfiguration.Initialize();
+
+            Application.Run(new Form1());
+        }
+    }
+}
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
+==============================================================================
 using ProjWizInc.Core.ADT;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ProjWizInc.Core.Definitions;
-using xUnitTester;
-using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Definitions.Blueprints;
-
-namespace xUnitTester.Managers {
-    
-    public class JobManagerTests {
-        private bool _eventFired = false;
-        private void OnResourceGained(ResourceGainedEvent e) {
-            _eventFired = true;
-        }
-        private void JobCompleted(JobCompleted e) {
-            _eventFired = true;
-        }
-        [Fact]
-        public void JobManager_Update_CompletesJob_WhenTicksReached() {
-            
-            EventManager eventManager = new EventManager();
-            JobState jobState = new JobState();
-            jobState.ActiveJobId = 0;
-            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
-            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
-            jobState.Ticks = new BigNum(99);
-            _eventFired = false;
-            jobState.ActiveJobId = 0;
-            eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
-            eventManager.Publish(new UpdateLogicEvent());
-            Assert.Equal(new BigNum(0), jobState.Ticks);
-            Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
-        }
-        [Fact]
-        public void Prove_Type_Consistency() {
-            // Type used by the Test
-            Type testType = typeof(UpdateLogicEvent);
-
-            // Type used by the Core
-            Type coreType = typeof(ProjWizInc.Core.Events.UpdateLogicEvent);
-
-            // If this assertion fails, you have a duplicate file causing an assembly mismatch!
-            Assert.Equal(coreType.AssemblyQualifiedName, testType.AssemblyQualifiedName);
-        }
-        [Fact]
-        public void JobManager_ManualComplete_PublishesEvent() {
-            EventManager eventManager = new EventManager();
-            JobState state = new JobState();
-            state.ActiveJobId = 0;
-            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
-            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
-            _eventFired = false;
-            eventManager.Subscribe<JobCompleted>(JobCompleted);
-            jobManager.CompleteJob();
-            Assert.True(_eventFired, "CompleteJob() was called, but no event was published");
-        }
-        [Fact]
-        public void JobManager_CachesStateOnConstruction() {
-            EventManager eventManager = new EventManager();
-            JobState state = new JobState();
-            state.ActiveJobId = 0;
-            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
-            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
-            Assert.NotNull(jobDefinition);
-            Assert.Equal(2, jobDefinition.Components.Count);
-            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
-            Assert.NotNull(state.JobTicksRequired);
-            Assert.NotNull(state.JobPayout);
-        }
-        [Fact]
-        public void JobManager_IncrementsTicks_OnUpdateEvent() {
-            EventManager eventManager = new EventManager();
-            JobState state = new JobState();
-            state.ActiveJobId = 0;
-            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
-            JobManager jobManager = new JobManager(eventManager, state,definitionManager);
-            state.Ticks = new BigNum(50);
-            eventManager.Publish(new UpdateLogicEvent());
-            Assert.Equal(new BigNum(51), state.Ticks);
-        }
-        [Fact]
-        public void JobManager_ContinuesLoopingAfterCompletion_WhenSameJobSelected() {
-
-        }
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\TimeManagerTests.cs
-==============================================================================
-using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
 using ProjWizInc.Core.States.Managers;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
+namespace Testertron {
+    internal class Program {
+        private static CoreContext _context = null!;
+        private static bool _running = true;
 
+        public static void Main(string[] args) {
+            // 1. Boot the core context (This loads the split JSON files from bin/Debug/net8.0/defs/)
+            _context = Bootstrapper.BuildContext();
 
+            // 2. Subscribe to the render frame (the 30 PPS pulse) to redraw the screen
+            _context.Subscribe<UpdateRenderEvent>(OnRenderPulse);
 
+            // 3. Start the asynchronous background tick loops
+            _context.Start();
 
-namespace xUnitTester.Managers {
-    public class TimeManagerTests {
-        [Fact]
-        public void TimeManager_StartsAtZero() {
-            EventManager eventManager = new EventManager();
-            TimeState timeState = new TimeState();
-            timeState.TicksElapsed = 0;
-            timeState.TimeElapsed = 0;
-            TimeManager timeManager = new TimeManager(eventManager,timeState);
-            Assert.Equal(0, timeManager.GetTime());
-            Assert.Equal(0, timeManager.State.TicksElapsed);
-        }
-        [Fact]
-        public void TimeManager_IncrementsTicks_OnUpdateEvent() {
-            EventManager eventManager = new EventManager();
-            TimeState timeState = new TimeState();
-            timeState.TicksElapsed = 0;
-            timeState.TimeElapsed = 0;
-            TimeManager timeManager = new TimeManager(eventManager, timeState);
-            eventManager.Publish(new UpdateLogicEvent());
-            Assert.Equal(1, timeManager.State.TicksElapsed);
-            Assert.Equal(0, timeManager.GetTime());
-        }
-        [Fact]
-        public void TimeManager_TicksRolloverToSeconds_AtTpsThreshold() {
-            EventManager eventManager = new EventManager();
-            TimeState timeState = new TimeState();
-            timeState.TicksElapsed = 0;
-            timeState.TimeElapsed = 0;
+            // Hide the terminal cursor to prevent blinking visual artifacts
+            Console.CursorVisible = false;
+            Console.Clear();
 
-            TimeManager timeManager = new TimeManager(eventManager, timeState);
+            // 4. Main Non-Blocking Input Loop
+            while (_running) {
+                // Check if a key was pressed without blocking the thread
+                if (Console.KeyAvailable) {
+                    ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                    ProcessInput(keyInfo);
+                }
 
-            // Publish exactly the number of ticks required for 1 second (100 ticks)
-            int ticksNeeded = Globals.LOGIC_TPS;
-            for (int i = 0; i < ticksNeeded; i++) {
-                eventManager.Publish(new UpdateLogicEvent());
+                // Yield the CPU slightly (sleep 50ms) to keep CPU core usage near 0%
+                Thread.Sleep(50);
             }
 
-            // Ticks should reset back to 0, and TimeElapsed should increment to 1
-            Assert.Equal(0, timeManager.State.TicksElapsed);
-            Assert.Equal(1, timeManager.State.TimeElapsed);
-            Assert.Equal(1, timeManager.GetTime());
+            // Cleanup on termination
+            _context.Unsubscribe<UpdateRenderEvent>(OnRenderPulse);
+            Console.CursorVisible = true;
+            Console.Clear();
+            Console.WriteLine("Headless engine terminated cleanly.");
+        }
+
+        private static void OnRenderPulse(UpdateRenderEvent e) {
+            // Resets the draw cursor to the top-left corner instead of clearing the screen.
+            // This achieves standard, flicker-free rendering inside the console.
+            Console.SetCursorPosition(0, 0);
+
+            long time = _context.GetTimeState().TimeElapsed;
+            Console.WriteLine("==================================================");
+            Console.WriteLine("         PROJECT WIZARD INCREMENTAL - TERMINAL    ");
+            Console.WriteLine("==================================================");
+            Console.WriteLine(" Time Elapsed: " + time.ToString() + "s");
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Resources
+            Console.WriteLine(" INVENTORY:");
+            int resourceCount = _context.GetResourceCount();
+            for (int i = 0; i < resourceCount; i++) {
+                ResourceDefinition def = _context.GetResourceDefinition(i);
+                BigNum amount = _context.GetResourceAmount(i);
+                Console.WriteLine("  - " + def.DisplayName + ": " + amount.ToString());
+            }
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Jobs
+            Console.WriteLine(" AVAILABLE TASKS:");
+            int jobCount = _context.GetJobCount();
+            JobState jobState = _context.GetJobState();
+            int activeJobId = jobState.ActiveJobId;
+
+            for (int i = 0; i < jobCount; i++) {
+                JobDefinition def = _context.GetJobDefinition(i);
+                string status = "Idle  ";
+                string progress = "0%  ";
+
+                if (i == activeJobId) {
+                    status = "ACTIVE";
+                    if (jobState.JobTicksRequired != null) {
+                        double current = 0.0;
+                        double required = 1.0;
+
+                        // Parse BigNum limits into doubles for display percentage
+                        if (!jobState.Ticks.IsLarge) {
+                            current = jobState.Ticks.Small;
+                        } else {
+                            current = jobState.Ticks.Man * Math.Pow(10, jobState.Ticks.Exp);
+                        }
+
+                        if (!jobState.JobTicksRequired.RequiredTicks.IsLarge) {
+                            required = jobState.JobTicksRequired.RequiredTicks.Small;
+                        } else {
+                            required = jobState.JobTicksRequired.RequiredTicks.Man * Math.Pow(10, jobState.JobTicksRequired.RequiredTicks.Exp);
+                        }
+
+                        double ratio = current / required;
+                        progress = ((int)(ratio * 100)).ToString() + "%   ";
+                    }
+                }
+
+                Console.WriteLine("  [" + (i + 1).ToString() + "] " + def.DisplayName.PadRight(15) + " (" + status + ") - Progress: " + progress);
+            }
+            Console.WriteLine("--------------------------------------------------");
+            Console.WriteLine(" Controls: Press [1], [2], [3] to Toggle Jobs.    ");
+            Console.WriteLine("           Press [Q] to Quit.                     ");
+            Console.WriteLine("==================================================");
+        }
+
+        private static void ProcessInput(ConsoleKeyInfo keyInfo) {
+            char keyChar = keyInfo.KeyChar;
+
+            if (keyChar == 'q' || keyChar == 'Q') {
+                _running = false;
+            } else if (keyChar == '1') {
+                _context.ToggleJob(0);
+            } else if (keyChar == '2') {
+                _context.ToggleJob(1);
+            } else if (keyChar == '3') {
+                _context.ToggleJob(2);
+            }
         }
     }
 }
-
 

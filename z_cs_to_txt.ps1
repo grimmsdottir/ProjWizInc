@@ -1,6 +1,6 @@
 $baseFileName = "z_solution"
 $excludeFolders = @("obj", "bin", ".vs", ".git")
-$maxCharCount = 3000 # Set your arbitrary character threshold here
+$maxCharCount = 20000 # Set your arbitrary character threshold here
 
 # Remove any existing output files from previous runs to prevent mixing old and new files
 Remove-Item "${baseFileName}_*.txt" -ErrorAction SilentlyContinue

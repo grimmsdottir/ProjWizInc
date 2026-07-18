@@ -1,2 +1,2 @@
 # ProjWizInc
-the inc stands for incremental not incorporated
+Its short for Project Wizard Incremental

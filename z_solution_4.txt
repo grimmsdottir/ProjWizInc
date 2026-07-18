@@ -1,5 +1,81 @@
 ﻿==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
+FILE: ProjWizInc.Core\Managers\GameLoopManager.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using static ProjWizInc.Core.Data.Globals;
+
+namespace ProjWizInc.Core.Managers {
+    
+    public class GameLoopManager {
+        
+        private double _timeAccumulator = 0;
+        private readonly Stopwatch _stopwatch;
+        //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
+        private CancellationTokenSource _cts;
+        private readonly EventManager _events;
+        public GameLoopManager(EventManager events) {
+            _stopwatch = new Stopwatch();
+            _events = events;
+
+        }
+        public void Start() {
+            //if it is not null, that means that the Manager has already started, so this stops duplicating runs
+            if (_cts != null) {
+                //todo: log it
+                return;
+            }
+            _cts = new CancellationTokenSource();
+            _stopwatch.Start();
+            //this one line kicks off the whole actual loop
+            Task.Run(() => RunLoopAsync(_cts.Token));
+        }
+        public void Init() {
+        }
+        public void Stop() {
+            //???
+            _cts?.Cancel();
+            _stopwatch.Stop();
+            _cts = null;
+        }
+        private async Task RunLoopAsync(CancellationToken token) {
+            //PeriodicTimer is another clock timer thing that is used for async and awaiting stuff
+            //less accurate than Stopwatch, but Stopwatch cant control CPU flow
+            //even though its less accurate, we dont need it to be super accurate because we have the accumalator
+            //to catch up to it and stuff
+            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(FRAME_LENGTH_MS));
+            while (!token.IsCancellationRequested && await periodicTimer.WaitForNextTickAsync(token)) {
+                double secondsPassed = _stopwatch.Elapsed.TotalSeconds;
+                _stopwatch.Restart();
+                //we cap the time passed so we dont melt the CPU with our CPU burst later
+                if (secondsPassed > 0.25) secondsPassed = 0.25;
+                _timeAccumulator += secondsPassed;
+                //this lets us decouple UPS from FPS, 
+                while (_timeAccumulator >= TICK_LENGTH) {
+                    LogicStep();
+                    _timeAccumulator -= TICK_LENGTH;
+                }
+                PresentationStep();
+            }
+        }
+        private void LogicStep() {
+            _events.Publish(new UpdateLogicEvent());
+        }
+        private void PresentationStep() {
+            _events.Publish(new UpdateRenderEvent());
+        }
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Managers\JobManager.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
@@ -79,7 +155,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs
+FILE: ProjWizInc.Core\Managers\TimeManager.cs
 ==============================================================================
 using ProjWizInc.Core.Data;
 using ProjWizInc.Core.Events;
@@ -123,7 +199,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\BigNumJsonConverter.cs
+FILE: ProjWizInc.Core\Persistence\BigNumJsonConverter.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using System;
@@ -155,7 +231,7 @@ namespace ProjWizInc.Core.Persistence {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\SerialisationService.cs
+FILE: ProjWizInc.Core\Persistence\SerialisationService.cs
 ==============================================================================
 using ProjWizInc.Core.States;
 using System;
@@ -205,7 +281,7 @@ namespace ProjWizInc.Core.Persistence {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\GameState.cs
+FILE: ProjWizInc.Core\States\GameState.cs
 ==============================================================================
 using ProjWizInc.Core.States.Managers;
 using System;
@@ -227,7 +303,7 @@ namespace ProjWizInc.Core.States {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\EconomyState.cs
+FILE: ProjWizInc.Core\States\Managers\EconomyState.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using System;
@@ -245,7 +321,7 @@ namespace ProjWizInc.Core.States.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\JobState.cs
+FILE: ProjWizInc.Core\States\Managers\JobState.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Data;
@@ -279,7 +355,7 @@ namespace ProjWizInc.Core.States.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\TimeState.cs
+FILE: ProjWizInc.Core\States\Managers\TimeState.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -297,7 +373,7 @@ namespace ProjWizInc.Core.States.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs
+FILE: ProjWizInc.WinForms\Form1.cs
 ==============================================================================
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.Managers;
@@ -336,7 +412,7 @@ namespace ProjWizInc.WinForms
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs
+FILE: ProjWizInc.WinForms\Form1.Designer.cs
 ==============================================================================
 namespace ProjWizInc.WinForms
 {
@@ -455,7 +531,7 @@ namespace ProjWizInc.WinForms
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs
+FILE: ProjWizInc.WinForms\Program.cs
 ==============================================================================
 namespace ProjWizInc.WinForms
 {
@@ -477,7 +553,7 @@ namespace ProjWizInc.WinForms
 }
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
+FILE: Testertron\Program.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Blueprints;

@@ -1,5 +1,5 @@
 ﻿==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\App.axaml.cs
+FILE: AvaloniaApplication1\App.axaml.cs
 ==============================================================================
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -33,7 +33,7 @@ namespace AvaloniaApplication1 {
 }
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Program.cs
+FILE: AvaloniaApplication1\Program.cs
 ==============================================================================
 using Avalonia;
 using System;
@@ -61,7 +61,7 @@ namespace AvaloniaApplication1 {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewLocator.cs
+FILE: AvaloniaApplication1\ViewLocator.cs
 ==============================================================================
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -99,7 +99,7 @@ namespace AvaloniaApplication1 {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\JobsVM.cs
+FILE: AvaloniaApplication1\ViewModels\JobsVM.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -163,7 +163,7 @@ namespace AvaloniaApplication1.ViewModels {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\MainWindowViewModel.cs
+FILE: AvaloniaApplication1\ViewModels\MainWindowViewModel.cs
 ==============================================================================
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -285,7 +285,7 @@ namespace AvaloniaApplication1.ViewModels {
 }
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ResourceVM.cs
+FILE: AvaloniaApplication1\ViewModels\ResourceVM.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -322,7 +322,7 @@ namespace AvaloniaApplication1.ViewModels {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ToggleJobCommand.cs
+FILE: AvaloniaApplication1\ViewModels\ToggleJobCommand.cs
 ==============================================================================
 using System;
 using System.Windows.Input;
@@ -350,7 +350,7 @@ namespace AvaloniaApplication1.ViewModels {
 }
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\ViewModels\ViewModelBase.cs
+FILE: AvaloniaApplication1\ViewModels\ViewModelBase.cs
 ==============================================================================
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -361,7 +361,7 @@ namespace AvaloniaApplication1.ViewModels {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\AvaloniaApplication1\Views\MainWindow.axaml.cs
+FILE: AvaloniaApplication1\Views\MainWindow.axaml.cs
 ==============================================================================
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;

@@ -1,5 +1,28 @@
 ﻿==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\IEntryInterface.cs
+FILE: ProjWizInc.Core\Definitions\Common\IDefinitionComponentInterface.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Components;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    // This tells the Serializer: "When you see an IFeatureInterface, look for the $type field"
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    // This maps the string "payout" in JSON to the actual C# class PayoutFeature
+    [JsonDerivedType(typeof(PayoutComponent), "payout")]
+    [JsonDerivedType(typeof(RequiresTicksComponent), "ticks")]
+    public interface IDefinitionComponentInterface {
+        //we can add some fields here later like name or description for tooltips or flavor
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Common\IEntryInterface.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -14,7 +37,7 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\ILinkableDefinitionInterface.cs
+FILE: ProjWizInc.Core\Definitions\Common\ILinkableDefinitionInterface.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -30,7 +53,7 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\PayoutComponent.cs
+FILE: ProjWizInc.Core\Definitions\Components\PayoutComponent.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Blueprints;
@@ -55,7 +78,7 @@ namespace ProjWizInc.Core.Definitions.Components {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Components\RequiresTicksComponent.cs
+FILE: ProjWizInc.Core\Definitions\Components\RequiresTicksComponent.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
@@ -74,7 +97,7 @@ namespace ProjWizInc.Core.Definitions.Components {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Entries\ResourcePayoutEntry.cs
+FILE: ProjWizInc.Core\Definitions\Entries\ResourcePayoutEntry.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions.Common;
@@ -98,7 +121,7 @@ namespace ProjWizInc.Core.Definitions.Entries {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Events\Events.cs
+FILE: ProjWizInc.Core\Events\Events.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using System;
@@ -119,7 +142,7 @@ namespace ProjWizInc.Core.Events {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
+FILE: ProjWizInc.Core\Managers\Bootstrapper.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
@@ -319,7 +342,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\CoreContext.cs
+FILE: ProjWizInc.Core\Managers\CoreContext.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
@@ -419,7 +442,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EconomyManager.cs
+FILE: ProjWizInc.Core\Managers\EconomyManager.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Data;
@@ -478,7 +501,7 @@ namespace ProjWizInc.Core.Managers {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EventManager.cs
+FILE: ProjWizInc.Core\Managers\EventManager.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
@@ -572,82 +595,6 @@ namespace ProjWizInc.Core.Managers {
         }
 
 
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\GameLoopManager.cs
-==============================================================================
-using ProjWizInc.Core.Events;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using static ProjWizInc.Core.Data.Globals;
-
-namespace ProjWizInc.Core.Managers {
-    
-    public class GameLoopManager {
-        
-        private double _timeAccumulator = 0;
-        private readonly Stopwatch _stopwatch;
-        //this CTS thing is a sort of remote that is used to gracefully end a looping async thread
-        private CancellationTokenSource _cts;
-        private readonly EventManager _events;
-        public GameLoopManager(EventManager events) {
-            _stopwatch = new Stopwatch();
-            _events = events;
-
-        }
-        public void Start() {
-            //if it is not null, that means that the Manager has already started, so this stops duplicating runs
-            if (_cts != null) {
-                //todo: log it
-                return;
-            }
-            _cts = new CancellationTokenSource();
-            _stopwatch.Start();
-            //this one line kicks off the whole actual loop
-            Task.Run(() => RunLoopAsync(_cts.Token));
-        }
-        public void Init() {
-        }
-        public void Stop() {
-            //???
-            _cts?.Cancel();
-            _stopwatch.Stop();
-            _cts = null;
-        }
-        private async Task RunLoopAsync(CancellationToken token) {
-            //PeriodicTimer is another clock timer thing that is used for async and awaiting stuff
-            //less accurate than Stopwatch, but Stopwatch cant control CPU flow
-            //even though its less accurate, we dont need it to be super accurate because we have the accumalator
-            //to catch up to it and stuff
-            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(FRAME_LENGTH_MS));
-            while (!token.IsCancellationRequested && await periodicTimer.WaitForNextTickAsync(token)) {
-                double secondsPassed = _stopwatch.Elapsed.TotalSeconds;
-                _stopwatch.Restart();
-                //we cap the time passed so we dont melt the CPU with our CPU burst later
-                if (secondsPassed > 0.25) secondsPassed = 0.25;
-                _timeAccumulator += secondsPassed;
-                //this lets us decouple UPS from FPS, 
-                while (_timeAccumulator >= TICK_LENGTH) {
-                    LogicStep();
-                    _timeAccumulator -= TICK_LENGTH;
-                }
-                PresentationStep();
-            }
-        }
-        private void LogicStep() {
-            _events.Publish(new UpdateLogicEvent());
-        }
-        private void PresentationStep() {
-            _events.Publish(new UpdateRenderEvent());
-        }
     }
 }
 

@@ -13,6 +13,8 @@ namespace ProjWizInc.Core.Definitions.Common {
     [JsonDerivedType(typeof(PayoutComponent), "payout")]
     [JsonDerivedType(typeof(RequiresTicksComponent), "ticks")]
     public interface IDefinitionComponentInterface {
+        //for our OCP, we can use this to identify the type of component for fetching during hotpath
+        //int ComponentTypeId { get; }
         //we can add some fields here later like name or description for tooltips or flavor
     }
 }

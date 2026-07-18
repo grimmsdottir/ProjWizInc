@@ -1,479 +1,129 @@
 ﻿==============================================================================
 FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\ADT\BigNum.cs
 ==============================================================================
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Reflection.Metadata;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.ADT {
-    // 1. Special states for division-by-zero or mathematical failures
-    public enum NumericState : byte {
-        Normal = 0,
-        NaN = 1,
-        PositiveInfinity = 2,
-        NegativeInfinity = 3
-    }
-    // Guarantees 8-byte sequential packing on the stack with zero alignment padding
-    [StructLayout(LayoutKind.Sequential, Pack = 8)]
-    public readonly record struct BigNum {
-        //special static array that holds all the powers of 10 from 10^-324 to 10^308, so we dont have to call Math.Pow every time we need a power of 10
-        private static readonly double[] PowersOf10;
-        private const int MIN_POWER = -324;
-        private const int MAX_POWER = 308;
-        private const int BIAS = 324; // Offsets negative index bounds to start at 0
-        //simplified constants for the threshold values, so we dont have to calculate them every time
-        private const double THRESHOLD_HIGH = 1_000_000_000_000_000; // 1e15
-        private const double THRESHOLD_LOW = 0.0001; //1e-4, we could use 1e-15, but visually 1e-4 is near the limit of human perception
-        private const int THRESH_POW = 15;
-        private const double EPSILON = 1e-15;
-        // === INSTANCE FIELDS (Ordered descending by size for optimal 24-byte stack footprint) ===
-        private readonly double _small;       // Offset 0  (8 bytes)
-        private readonly double _man;         // Offset 8  (8 bytes)
-        private readonly int _exp;            // Offset 16 (4 bytes) - Swapped to int
-        private readonly bool _isLarge;       // Offset 20 (1 byte)
-        private readonly bool _isNegative;    // Offset 21 (1 byte)
-        private readonly NumericState _state; // Offset 22 (1 byte)  - Exponent Special State
-        private readonly byte _towerLevel;    // Offset 23 (1 byte)  - Tetration Exponent Tower Level
-        static BigNum() {
-            //we need an array to hold all the powers of 10 from 10^-324 to 10^308, so we dont have to call Math.Pow every time we need a power of 10
-            PowersOf10 = new double[MAX_POWER - MIN_POWER + 1];
-            for (int i = MIN_POWER; i <= MAX_POWER; i++) {
-                int arrayIndex = i + BIAS;
-                PowersOf10[arrayIndex] = Math.Pow(10, i);
-            }
         }
-        //our blessed O(1) power of 10 function, that uses the precomputed array to return the power of 10 in constant time
-        public static double GetPowerOf10(int power) {
-            if (power >= MIN_POWER && power <= MAX_POWER) {
-                return PowersOf10[power + BIAS];
-            }
-            // Fallback for extreme exponent cases (e.g. infinite scales)
-            return Math.Pow(10, power);
-        }
-        //public getters
-        public double Small => _small;
-        public double Man => _man;
-        public int Exp => _exp;
-        public bool IsLarge => _isLarge;
-        public bool IsNegative => _isNegative;
-        public BigNum() : this(0) { }
-        //int and long constructors are just wrappers for the double constructor, since they are all small numbers
-        public BigNum(int value) : this((double)value) { }
-        public BigNum(long value) : this((double)value) { }
-        //we now have a seperate constructor for double, that doesnt need to chain to the scientific constructor, since it can handle small numbers itself
-        public BigNum(double value) {
-            _isNegative = value < 0;
-            _state = NumericState.Normal;
-            _towerLevel = 0;
-            double absVal = Math.Abs(value);
-
-            if (value == 0) {
-                _man = 0;
-                _exp = 0;
-                _small = 0;
-                _isLarge = false;
-                return;
-            }
-
-            if (absVal > THRESHOLD_LOW && absVal < THRESHOLD_HIGH) {
-                _small = value;
-                _isLarge = false;
-                //TODO: is neccesary?
-                int intExp = (int)Math.Floor(Math.Log10(absVal));
-                _exp = intExp;
-                _man = value / GetPowerOf10((int)intExp);
-            } else {
-                _small = 0;
-                _isLarge = true;
-
-                int intExp = (int)Math.Floor(Math.Log10(absVal));
-                _exp = intExp;
-                _man = value / GetPowerOf10((int)intExp);
-            }
-        }
-        //the old constructor that takes in a mantissa and exponent, and normalizes it to be in the correct range
-        public BigNum(double man, int exp) {
-            _state = NumericState.Normal;
-            _towerLevel = 0;
-
-            if (man == 0) {
-                _man = 0;
-                _exp = 0;
-                _small = 0;
-                _isLarge = false;
-                _isNegative = false;
-                return;
-            }
-
-            // Calculate internal exponent of input mantissa
-            int intExp = (int)Math.Floor(Math.Log10(Math.Abs(man)));
-            exp = checked(exp + intExp); // Checked arithmetic prevents silent overflow
-            man /= GetPowerOf10(intExp);
-
-            // Handle representation edge cases
-            if (Math.Abs(man) >= 10) {
-                man /= 10;
-                exp = checked(exp + 1);
-            }
-
-            _isNegative = man < 0;
-
-            // Checked boundary check using integer comparisons
-            if (exp >= -4 && exp < 15) {
-                _small = man * GetPowerOf10(exp);
-                _isLarge = false;
-            } else {
-                _small = 0;
-                _isLarge = true;
-            }
-
-            _man = man;
-            _exp = exp;
-        }
-        public BigNum(String s) {
-            BigNum val = Parse(s);
-            _state = NumericState.Normal;
-            _towerLevel = 0;
-            _isLarge = val._isLarge;
-            _small = val._small;
-            _isNegative = val._isNegative;
-            _man = val._man;
-            _exp = val._exp;
-        }
-        public static BigNum operator +(BigNum a, BigNum b) {
-            if (a._isNegative != b._isNegative) { return a - (-b); }
-            //small + small
-            if (!a._isLarge && !b._isLarge) {
-                //if we add 2 smalls together, they can cross the boundry and overflow if we did a simple long sum
-                //doubles can hold more than longs, so we can use double addition to be safe. precision should not matter
-                //at the long boundry, 9e18
-                double testSum = (double)a._small + (double)b._small;
-                if (testSum <= long.MinValue || testSum >= long.MaxValue) {
-                    //we can just use our constructor to resolve the addition, since we already added it
-                    return new BigNum(testSum);
-                } else {
-                    //in this case we can just return the 2 smalls added together
-                    //we dont use testSum because its a double and we dont need to lose precision over that
-                    return new BigNum(a._small + b._small);
-                }                
-            }
-            //if either numbers are big, we have to do the slower operation
-            //if a is small, we just use the small, otherwise we take their man and exp
-            double man1 = a.Man;
-            double man2 = b.Man;
-            int exp1 = a.Exp;
-            int exp2 = b.Exp;
-            //ensure that a is smaller than b
-            if (exp1 < exp2) {
-                double manTmp = man1;
-                int expTmp = exp1;
-                man1 = man2;
-                exp1 = exp2;
-                man2 = manTmp;
-                exp2 = expTmp;
-            }
-            int diff = checked(exp1 - exp2);
-            if (diff > THRESH_POW) { 
-                return new BigNum(man1,exp1);
-            } else {
-                return new BigNum(man1 + (man2 / GetPowerOf10((int)diff)), exp1);
-            }
-        }
-        public static BigNum operator ++(BigNum a) {
-            if (a._isLarge) {  return a; }
-            return a + 1;
-        }
-        public static BigNum operator -(BigNum a, BigNum b) {
-            if (a._isNegative != b._isNegative) { return a + (-b); }
-
-            double man1 = a.Man;
-            double man2 = b.Man;
-            int exp1 = a.Exp;
-            int exp2 = b.Exp;
-            int diff = checked( exp1 - exp2);
-            //if the difference is too big, we can just return the larger number, because the smaller number is negligible
-            if (diff > THRESH_POW) { return a; }
-            //same with the other way around, if b is larger than a, we can just return b
-            if (diff < -THRESH_POW) { return b; }
-            return new BigNum(man1 - (man2 / GetPowerOf10(diff)), exp1);
-        }
-        public static BigNum operator --(BigNum a) {
-            if (a._isLarge) { return a; }
-            return a - 1;
-        }
-        public static BigNum operator *(BigNum a, BigNum b) {
-            double man1 = a.Man;
-            double man2 = b.Man;
-            int exp1 = a.Exp;
-            int exp2 = b.Exp;
-            return new BigNum(man1 * man2, checked(exp1 + exp2));
-        }
-        public static BigNum operator /(BigNum a, BigNum b) {
-            if (b.Equals(new BigNum(0))) {
-                throw new DivideByZeroException("Cannot divide BigNum by zero.");
-            }
-
-            double man1 = a.Man;
-            double man2 = b.Man;
-            int exp1 = a.Exp;
-            int exp2 = b.Exp;
-            return new BigNum(man1 / man2, checked(exp1 - exp2));
-        }
-        public static BigNum operator %(BigNum a, BigNum b) {
-            if (b == new BigNum(0)) { throw new DivideByZeroException("Cannot modulo BigNum by zero"); }
-            //if both numbers are small, we can use good ol double modulo
-            if (!a.IsLarge && !b.IsLarge) {
-                return new BigNum((a.Small % b.Small));
-            }
-            //otherwise we have to do the slow scientific path
-            double man1 = a.Man;
-            double man2 = b.Man;
-            int exp1 = a.Exp;
-            int exp2 = b.Exp;
-            //same exponent means we can just do a regular modulo on the mantissas
-            if (exp1 == exp2) {
-                return new BigNum((man1 % man2), exp1);
-            }
-            //we use the math rule of if a < b, then a % b = a, so we just check the exponents and return the smaller one
-            if (exp1 < exp2) {
-                return a;
-            }
-            //now we come to the hard and slow path
-            int expDiff = checked(exp1 - exp2);
-            if (expDiff > THRESH_POW) {
-                //if the difference is too big, we can just return a, because a is smaller than b
-                return new BigNum(0);
-            }
-            // Scale the dividend mantissa to align exponents, then perform double modulo
-            double scaledManA = man1 * GetPowerOf10((int)expDiff);
-            double resultMan = scaledManA % man2;
-
-            return new BigNum(resultMan, exp2);
-        }
-        //comparator section
-        public static bool operator >(BigNum a, BigNum b) {
-            // If both are small, perform fast hardware comparison
-            if (!a._isLarge && !b._isLarge) {
-                return a._small > b._small;
-            }
-
-            // 1. Mismatched Signs (Instant resolution)
-            if (a._isNegative != b._isNegative) {
-                return b._isNegative; // If b is negative, a must be positive, so a > b is true
-            }
-
-            // 2. Symmetrical Signs
-            int expA = a._exp;
-            int expB = b._exp;
-
-            if (!a._isNegative) {
-                // Both are Positive: larger exponent means larger number
-                if (expA > expB) { return true; }
-                if (expA < expB) { return false; }
-                return a._man > b._man;
-            } else {
-                // Both are Negative: larger exponent means smaller (more-negative) number
-                if (expA > expB) { return false; }
-                if (expA < expB) { return true; }
-                return a._man > b._man; // e.g. -1.5 * 10^20 > -2.0 * 10^20 is true
-            }
-        }
-        //we do a logical delegation, since a < b is the same as b > a, we can just use the > operator to determine if a < b
-        public static bool operator <(BigNum a, BigNum b) {
-            return b > a;
-        }
-        public static bool operator >=(BigNum a, BigNum b) {
-           return (a > b) || (a == b);
-        }
-        public static bool operator <=(BigNum a, BigNum b) {
-            return (a < b) || (a == b);
-        }
-        //unary negation operator, that just flips the sign of the number
-        public static BigNum operator -(BigNum a) {
-            if (a._isLarge) {
-                return new BigNum(-a._man, a._exp);
-            }
-            return new BigNum(-a._small);
-        }
-        // Explicit cast to double: allows progress bars to read ratios seamlessly
-        public static explicit operator double(BigNum value) {
-            if (!value._isLarge) {
-                return value._small;
-            }
-            return value._man * GetPowerOf10((int)value._exp);
-        }
-        // Explicit cast to long: useful for standard integer operations
-        public static explicit operator long(BigNum value) {
-            if (!value._isLarge) {
-                return (long)value._small;
-            }
-
-            double doubleVal = value._man * GetPowerOf10((int)value._exp);
-            if (doubleVal >= long.MaxValue) {
-                return long.MaxValue;
-            }
-            if (doubleVal <= long.MinValue) {
-                return long.MinValue;
-            }
-            return (long)doubleVal;
-        }
-        // Explicit cast to int
-        public static explicit operator int(BigNum value) {
-            return ((int)value);
-        }
-        public static BigNum Abs(BigNum value) {
-            if (value._isLarge) {
-                return new BigNum(Math.Abs(value._man), value._exp);
-            }
-            return new BigNum(Math.Abs(value._small));
         }
 
-        public static BigNum Max(BigNum a, BigNum b) {
-            if (a > b) {
-                return a;
+        }
+        [Theory]
+        [InlineData(150, 0, 150.0, false)]     // Integer -> Small Path
+        [InlineData(1.5, 2, 150.0, false)]     // Scientific (Small) -> Small Path
+        [InlineData(1.5, 20, 0.0, true)]       // Scientific (Huge) -> Large Path
+        [InlineData(0.01, 0, 0.01, false)]     // Decimal -> NOW Small Path (Previously Large)
+        [InlineData(1.23, -2, 0.0123, false)]  // Negative Exp -> NOW Small Path
+        public void Constructor_Normalization_PathCheck(double mIn, int eIn, double expectedSmall, bool expectedIsLarge) {
+            var val = new BigNum(mIn, eIn);
+
+
             }
+        }
+
+        }
+
+
+        }
+        [Fact]
+        public void Addition_CrossesThreshold_Successfully() {
+            // Arrange: Use a number just below long.MaxValue (approx 9e18)
+            BigNum a = new BigNum(9_000_000_000_000_000_000L);
+            BigNum b = new BigNum(2_000_000_000_000_000_000L);
+
+
+        }
+        [Fact]
+        public void Addition_MassivePlusTiny_HandlesAbsorption() {
+            BigNum massive = BigNum.Parse("1.00e25");
+            BigNum tiny = new BigNum(1);
+
+
+        }
+
+        }
+
+        }
+        }
+        [Theory]
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("99", "100", true)]    // Less than
+        [InlineData("101", "100", false)]  // Greater than (should fail <=)
+        public void Operator_LessThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+        }
+        [Theory]
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("101", "100", true)]   // Greater than
+        [InlineData("99", "100", false)]   // Less than (should fail >=)
+        public void Operator_GreaterThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+
+        }
+
+
+        }
             return b;
         }
 
-        public static BigNum Min(BigNum a, BigNum b) {
-            if (a < b) {
-                return a;
-            }
-            return b;
         }
 
-        public static BigNum Clamp(BigNum value, BigNum min, BigNum max) {
-            if (value < min) {
-                return min;
-            }
-            if (value > max) {
-                return max;
-            }
-            return value;
         }
-        public static BigNum Floor(BigNum value) {
-            if (!value._isLarge) {
-                return new BigNum(Math.Floor(value._small));
-            }
-            // For large values (>= 1e15), double-precision has already discarded
-            // any fractional decimal digits. It is already mathematically an integer.
-            return value;
+
         }
-        //same as floor, at large scales, we can assume the number is already an integer, so we just return it as is
-        public static BigNum Ceiling(BigNum value) {
-            if (!value._isLarge) {
-                return new BigNum(Math.Ceiling(value._small));
-            }
-            return value;
+
+
+
+
+
         }
-        public static BigNum Pow(BigNum baseVal, int power) {
-            if (power == 0) {
-                return new BigNum(1);
-            }
-            if (power == 1) {
-                return baseVal;
-            }
-            // Using the algebraic identity: (M * 10^E)^P = M^P * 10^(E * P)
-            double newMan = Math.Pow(baseVal.Man, power);
-            int newExp = baseVal.Exp * power;
 
-            return new BigNum(newMan, newExp);
         }
-        public static BigNum Pow(BigNum baseVal, double power) {
-            if (power == 0.0) {
-                return new BigNum(1);
-            }
-            if (power == 1.0) {
-                return baseVal;
-            }
-            if (baseVal.Equals(new BigNum(0))) {
-                return new BigNum(0);
-            }
-            if (baseVal.IsNegative && Math.Floor(power) != power) {
-                throw new ArgumentException("Cannot raise a negative BigNum to a fractional power.");
-            }
-
-            // 1. Calculate the raw mantissa power: M^P
-            double newMan = Math.Pow(baseVal.Man, power);
-
-            // 2. Calculate E * P (resulting in a double)
-            double rawExp = baseVal.Exp * power;
-
-            // 3. Split rawExp into integer and fractional components
-            double expFloor = Math.Floor(rawExp);
-            int newExp = (int)expFloor;
-            double expFraction = rawExp - expFloor;
-
-            // 4. Multiply the fractional remainder back into the mantissa.
-            // 10^expFraction is guaranteed to be within [1, 10) because expFraction is within [0, 1)
-            newMan *= Math.Pow(10, expFraction);
-
-            // 5. Pass to our scientific constructor to normalize if newMan falls outside [1, 10)
-            return new BigNum(newMan, newExp);
         }
-        /*
-         * because BigNum is a struct, it uses Equals to operate ==, so this is not used
-        public static bool operator ==(BigNum a, BigNum b) {}
-        */
-        public bool Equals(BigNum other) {
-            //if one is bigly, and the other isnt, its clearly not the same already
-            if (IsLarge != other.IsLarge) { return false; }
-            //if they are both small numbers, we minus the two of them and if the difference is less than
-            //the epsilon, its good enough to be equal
-            if (!IsLarge) {
-                return Math.Abs(Small - other.Small) < EPSILON;
-            }
-            //otherwise they are both big numbers
-            if (_exp == other._exp) {
-                return Math.Abs(_man - other._man) < EPSILON;
-            }
-            return false;
-        }
-        //this also apparently important?
-        public override int GetHashCode() => HashCode.Combine(_small, _man, _exp, _isLarge);
-        public static BigNum Parse(string s) {
-            if (string.IsNullOrWhiteSpace(s)) {
-                throw new ArgumentException("Cannot parse empty string to BigNum");
-            }
-            //gotta trim whitespace for JSON and user input
-            s = s.Trim();
-            //case 1: scientific notation(1.0e50)
-            if (s.Contains('e', StringComparison.OrdinalIgnoreCase)) {
-                string[] parts = s.Split(new[] { 'e', 'E' }, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length != 2) throw new FormatException("Invalid scientific notation format.");
 
-                return new BigNum(double.Parse(parts[0]), int.Parse(parts[1]));
-            }
-            //case 2: smaller decimals. as it is it just yeets fractionals and turns doubles to longs
-            if (s.Contains('.')) {
-                return new BigNum(double.Parse(s));
-            }
-            //case 3: standard long input
-            return new BigNum(long.Parse(s));
         }
-        public override string ToString() {
-            if (!_isLarge) {
-                // 1. Get the standard C# double string
-                string s = _small.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        [Theory]
+        // === CATEGORY 1: SMALL PATH (Positive to Negative) ===
+        [InlineData("10", "-10")]                  // Small whole number
+        [InlineData("125.5", "-125.5")]            // Small decimal
+        [InlineData("150000", "-150000")]          // Large whole number on the small path
 
-                // 2. THE FIX: If C# used a capital 'E', replace it with lowercase 'e'!
-                return s.Replace("E", "e");
-            }
+        // === CATEGORY 2: SMALL PATH (Negative to Positive) ===
+        [InlineData("-10", "10")]                  // Small whole number
+        [InlineData("-125.5", "125.5")]            // Small decimal
+        [InlineData("-150000", "150000")]          // Large whole number on the small path
 
-            // Explicitly format the double using InvariantCulture
-            string formattedMan = _man.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-            return $"{formattedMan}e{_exp}";
+        // === CATEGORY 3: LARGE PATH (Positive to Negative) ===
+        [InlineData("1.50e20", "-1.50e20")]        // Standard large exponent
+        [InlineData("2.25e50", "-2.25e50")]        // Very large exponent
+        [InlineData("1.00e100", "-1.00e100")]      // Centillion-scale exponent
+
+        // === CATEGORY 4: LARGE PATH (Negative to Positive) ===
+        [InlineData("-1.50e20", "1.50e20")]        // Standard large exponent
+        [InlineData("-2.25e50", "2.25e50")]        // Very large exponent
+        [InlineData("-1.00e100", "1.00e100")]      // Centillion-scale exponent
+
+        // === CATEGORY 5: DECIMAL BOUNDARIES (Exponents <= -4) ===
+        // Below 1e-4, the constructor switches to the Large path to preserve visual clarity.
+        [InlineData("1.50e-5", "-1.50e-5")]        // Tiny fractional positive to negative
+        [InlineData("-1.50e-5", "1.50e-5")]        // Tiny fractional negative to positive
+        [InlineData("3.25e-25", "-3.25e-25")]      // Extremely small decimal positive to negative
+        [InlineData("-3.25e-25", "3.25e-25")]      // Extremely small decimal negative to positive
+
+        // === CATEGORY 6: ZERO BOUNDARY (Zero must remain unsigned) ===
+        [InlineData("0", "0")]                     // Standard positive zero
+        [InlineData("0.0", "0")]                   // Decimal zero
+        [InlineData("-0", "0")]                    // Negative zero must resolve to unsigned zero
+        public void Operator_Negation_CalculatesCorrectly(string valA, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum expectedBigNum = new BigNum(expected);
+            BigNum result = -a;
+
         }
-        //this one always returns the full 
-        public string ToScientific(bool truncate) {
-            string format = truncate ? "F2" : "G";
-            string formattedMan = _man.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
-            return $"{formattedMan}e{_exp}";
         }
         //these 2 lines allow us to natively/automatically turn numbers into BigNums
         public static implicit operator BigNum(long v) => new BigNum(v);
@@ -483,39 +133,57 @@ namespace ProjWizInc.Core.ADT {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Data\Globals.cs
 ==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Data {
-    public static class Globals {
-        public const int LOGIC_TPS = 100;
-        public const int PRESENTATION_PPS = 30;
 
-        public static readonly double TICK_LENGTH = 1.0 / LOGIC_TPS;
-        public static readonly double FRAME_LENGTH_MS = 1000.0 / PRESENTATION_PPS;
 
-        
+            // Act
+            CoreContext context = Bootstrapper.BuildContext(definitions, gameState);
+
+            // Assert
+            Assert.NotNull(context);
+            Assert.NotNull(context.GetTimeState());
+            Assert.Equal(0, context.GetTimeState().TimeElapsed);
+        }
+        }
+
+        [Fact]
+        public void Bootstrapper_BuildsAllManagers() {
+            // Arrange
+            GameDefinitions definitions = new GameDefinitions();
+            GameState gameState = new GameState();
+            gameState.economyState.Resources = new BigNum[0];
+            
+            // Act
+            CoreContext context = Bootstrapper.BuildContext(definitions, gameState);
+            
+            // Assert
+            Assert.NotNull(context.DefinitionManager);
+            Assert.NotNull(context.EventManager);
+            Assert.NotNull(context.EconomyManager);
+            Assert.NotNull(context.GameLoopManager);
+            Assert.NotNull(context.JobManager);
+            Assert.NotNull(context.TimeManager);
+        }
     }
-    public enum ResourceType {
-        Gold,
-        Wood,
-        Stone
-    }
-
 }
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\DefinitionManager.cs
 ==============================================================================
-using Microsoft.Win32;
-using ProjWizInc.Core.Definitions.Blueprints;
 using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Persistence;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -527,144 +195,322 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using static ProjWizInc.Core.Definitions.GameDefinitions;
 
-namespace ProjWizInc.Core.Definitions {
 
-    
-    public class DefinitionManager {
-        //now we use Type for keys. this first dictionary is a dictionary of dictionaries
-        //each type has its own dictionary, which maps strings to int
-        private readonly Dictionary<Type, Dictionary<string, int>> _typeKeyIdMap = [];
-        //for each Type, it will have its own array, we use a generic Array, because we dont know the typing yet,
-        //but it should basically be like <Type,Type[]>
-        //the int ids from the first dictionary map to the position in the defStore, for high performance
-        private readonly Dictionary<Type, Array> _typeIdDefMap = [];
-        public DefinitionManager(
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
-            Dictionary<Type, Array> typeIdDefMap
-            ) {
-            _typeKeyIdMap = typeKeyIdMap;
-            _typeIdDefMap = typeIdDefMap;
+            string jsonString = "\"1.50e2\"";
+            BigNum result = JsonSerializer.Deserialize<BigNum>(jsonString, options);
+
         }
-        //this one is like a get all dicts, but as an IEnumarable, which is basically like a copy/immutable
-        //collection. Primary use is for linking right now
-        public IEnumerable<Array> GetAllDefinitions() {
-            return _typeIdDefMap.Values;
         }
-        public IReadOnlyDictionary<Type, Dictionary<string, int>> GetAllTypeKeyIdMaps() {
-            return _typeKeyIdMap;
         }
-        public IReadOnlyDictionary<Type, Array> GetAllTypeIdDefMaps() {
-            return _typeIdDefMap;
-        }
-        //primarily used by the managers
-        public T GetDefinition<T>(int id) where T:DefinitionBase {
-            Array rawArray;
-            if (_typeIdDefMap.TryGetValue(typeof(T), out rawArray)) {
-                T[] typedArray = (T[])rawArray;
-                return typedArray[id];
-            }
-            throw new ArgumentException("Attempted to get definition of " + typeof(T).Name + ", which does not exist");
-        }
-        //primarily used by defs for linking
-        public int GetID<T>(string key) where T:DefinitionBase{
-            return _typeKeyIdMap[typeof (T)][key];
-        }
-        public int GetDefCount<T>() where T : DefinitionBase {
-            if (!_typeIdDefMap.ContainsKey(typeof(T))) {
-                throw new InvalidOperationException(
-                    $"[DefinitionManager] Type {typeof(T).Name} has not been registered yet. " +
-                    "Make sure definitions are loaded before calling this.");
-            }
-            return _typeIdDefMap[typeof(T)].Length;
         }
     }
 }
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\GameDefinitions.cs
 ==============================================================================
+using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Definitions {
-    public class GameDefinitions {
-        //our single source of truth for definitions, if we add any new definitions, it has to come here
-        public List<ResourceDefinition> Resources { get; set; } = [];
-        public List<JobDefinition> Jobs { get; set; } = [];
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Blueprints\JobDefinition.cs
-==============================================================================
 using ProjWizInc.Core.Definitions.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using ProjWizInc.Core.Managers;
 
-namespace ProjWizInc.Core.Definitions.Blueprints {
-    public class JobDefinition : DefinitionEntity {
-        
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Blueprints\ResourceDefinition.cs
-==============================================================================
-using ProjWizInc.Core.Definitions.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Definitions.Blueprints {
-    public class ResourceDefinition : DefinitionBase {
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\DefinitionBase.cs
-==============================================================================
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Definitions.Common {
-    public class DefinitionBase {
-        public string Key { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public int Id { get; set; } = -1;
-        public DefinitionBase() {
+namespace xUnitTester {
+    public class TestHelpers {
+        public const string TEST_GOLD_KEY = "gold";
+        public const int TEST_GOLD_ID = 0;
+        public const string TEST_JOB_KEY = "mine";
+        public const int TEST_JOB_ID = 0;
+        public static readonly BigNum TEST_PAYOUT_AMOUNT = new BigNum(12.34);
+        public static readonly BigNum TEST_REQUIRED_TICKS = new BigNum(100);
+        public static ResourceDefinition CreateTestGoldResourceDefinition() {
+            ResourceDefinition testGold = new ResourceDefinition();
+            testGold.Key = TEST_GOLD_KEY;
+            testGold.Id = TEST_GOLD_ID;
+            return testGold;
         }
-        public DefinitionBase(string key, int id) {
-            Key = key;
-            Id = id;
+        public static ResourcePayoutEntry CreateTestPayoutEntry() {
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
+            testPayoutEntry.ResourceKey = testGold.Key;
+            testPayoutEntry.ResourceID = testGold.Id;
+            testPayoutEntry.Amount = TEST_PAYOUT_AMOUNT;
+            return testPayoutEntry;
         }
+        public static PayoutComponent CreateTestPayoutComponent() {
+            PayoutComponent testPayoutComponent = new PayoutComponent();
+            testPayoutComponent.PayoutEntries.Add(CreateTestPayoutEntry());
+            return testPayoutComponent;
+        }
+        public static RequiresTicksComponent CreateTestTicksComponent() {
+            RequiresTicksComponent testTicksComponent = new RequiresTicksComponent();
+            testTicksComponent.RequiredTicks = TEST_REQUIRED_TICKS;
+            return testTicksComponent;
+        }
+        public static JobDefinition CreateTestJobDefinition() {
+            JobDefinition testJob = new JobDefinition();
+            testJob.Key = TEST_JOB_KEY;
+            testJob.Id = TEST_JOB_ID;
+            testJob.Components.Add(CreateTestPayoutComponent());
+            testJob.Components.Add(CreateTestTicksComponent());
+            return testJob;
+        }
+        public static IEnumerable<object[]> GetValidDefinitions() {
+            List<object[]> testData = new List<object[]>();
+
+            ResourceDefinition resourceDef = CreateTestGoldResourceDefinition();
+            testData.Add(new object[] { resourceDef });
+
+            JobDefinition jobDef = CreateTestJobDefinition();
+            testData.Add(new object[] { jobDef });
+
+            return testData;
+        }
+        [Theory]
+        [MemberData(nameof(GetValidDefinitions))]
+        public void TestDefinition_HasValidKeyAndId(DefinitionBase definition) {
+            DefinitionBase castedDef = definition;
+            Assert.NotEmpty(castedDef.Key);
+            Assert.True(castedDef.Id >= 0);
+        }
+        public static GameDefinitions CreateTestingGameDefinitions() {
+            GameDefinitions gameDefinitions = new GameDefinitions();
+            gameDefinitions.Resources.Add(CreateTestGoldResourceDefinition());
+            gameDefinitions.Jobs.Add(CreateTestJobDefinition());
+            return gameDefinitions;
+        }
+        [Fact]
+        public void CreateTestingGameDefinitions_CreatesValidDefinitions() {
+            GameDefinitions definitions = CreateTestingGameDefinitions();
+            Assert.NotNull(definitions);
+            Assert.NotEmpty(definitions.Resources);
+            Assert.NotEmpty(definitions.Jobs);
+            Assert.Equal(TEST_GOLD_KEY, definitions.Resources[0].Key);
+            Assert.Equal(TEST_JOB_KEY, definitions.Jobs[0].Key);
+        }
+        public static DefinitionManager CreateTestingDefinitionManager() {
+            BigNum AMOUNT = new BigNum(69.69);
+            //to build a DefinitionManager, we need a whole bunch of stuff
+            //first are the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //manually create some testing definitions
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            //jobs are quite a bit more complex because of their components
+            JobDefinition testJob = CreateTestJobDefinition();
+
+            ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
+            resourceIdDefMap[0] = testGold;
+            Dictionary<string, int> resourceKeyIdMap= [];
+            resourceKeyIdMap.Add(testGold.Key, testGold.Id);
+            JobDefinition[] jobIdDefMap = new JobDefinition[1];
+            jobIdDefMap[0] = testJob;
+            Dictionary<string, int> jobKeyIdMap = [];
+            jobKeyIdMap.Add(testJob.Key, testJob.Id);
+
+            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
+            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
+
+            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
+            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
+
     }
 }
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\DefinitionEntity.cs
 ==============================================================================
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
+
+namespace xUnitTester.Managers {
+    public class DefinitionManagerTests {
+        [Fact]
+        public void TestHelpers_BuildsCorrectDefinitionManager() {
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            IReadOnlyDictionary<Type, Dictionary<string, int>> typeKeyIdMap = definitionManager.GetAllTypeKeyIdMaps();
+            IReadOnlyDictionary< Type, Array > typeIdDefMap = definitionManager.GetAllTypeIdDefMaps();
+            Assert.NotNull(typeKeyIdMap);
+            Assert.NotNull(typeIdDefMap);
+
+
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            //check if the jobdefinition is valid
+            Assert.NotNull(jobDefinition);
+            Assert.Equal("mine",jobDefinition.Key);
+            Assert.Equal(0, jobDefinition.Id);
+
+            PayoutComponent payoutComponent= jobDefinition.GetComponent<PayoutComponent>();
+            Assert.NotNull(payoutComponent);
+            Assert.NotNull(payoutComponent.PayoutEntries);
+            ResourcePayoutEntry resourcePayoutEntry = payoutComponent.PayoutEntries[0];
+            Assert.NotNull(resourcePayoutEntry);
+            Assert.Equal("gold", resourcePayoutEntry.ResourceKey);
+            Assert.Equal(0, resourcePayoutEntry.ResourceID);
+            Assert.Equal(new BigNum(12.34), resourcePayoutEntry.Amount);
+
+
+        }
+    }
+}
+
+
+==============================================================================
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Events;
+using System.Runtime.CompilerServices;
+
+namespace xUnitTester.Managers {
+    public class EconomyManagerTests {
+        [Fact]
+        public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            const double AMMOUNT_TO_ADD = 100.50;
+            EventManager eventManager = new EventManager();
+            EconomyState economyState = new EconomyState();
+            economyState.Resources = new BigNum[1];
+            economyState.Resources[0] = new BigNum(0);
+
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
+
+            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
+            int goldId = 0;
+
+            eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
+
+            BigNum currentBalance = economyState.Resources[goldId];
+            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
+            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
+            
+    }
+}
+
+
+==============================================================================
+==============================================================================
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+        }
+        }
+    }
+}
+
+
+==============================================================================
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Definitions.Blueprints;
+
+namespace xUnitTester.Managers {
+    
+    public class JobManagerTests {
+        private bool _eventFired = false;
+        private void OnResourceGained(ResourceGainedEvent e) {
+            _eventFired = true;
+        }
+        private void JobCompleted(JobCompleted e) {
+            _eventFired = true;
+        }
+        [Fact]
+        public void JobManager_Update_CompletesJob_WhenTicksReached() {
+            
+            EventManager eventManager = new EventManager();
+            JobState jobState = new JobState();
+            jobState.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
+            jobState.Ticks = new BigNum(99);
+            _eventFired = false;
+            jobState.ActiveJobId = 0;
+            eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(0), jobState.Ticks);
+            Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
+        }
+        [Fact]
+        public void Prove_Type_Consistency() {
+            // Type used by the Test
+            Type testType = typeof(UpdateLogicEvent);
+
+            // Type used by the Core
+            Type coreType = typeof(ProjWizInc.Core.Events.UpdateLogicEvent);
+
+            // If this assertion fails, you have a duplicate file causing an assembly mismatch!
+            Assert.Equal(coreType.AssemblyQualifiedName, testType.AssemblyQualifiedName);
+        }
+        [Fact]
+        public void JobManager_ManualComplete_PublishesEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            _eventFired = false;
+            eventManager.Subscribe<JobCompleted>(JobCompleted);
+            jobManager.CompleteJob();
+            Assert.True(_eventFired, "CompleteJob() was called, but no event was published");
+        }
+        [Fact]
+        public void JobManager_CachesStateOnConstruction() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            Assert.NotNull(jobDefinition);
+            Assert.Equal(2, jobDefinition.Components.Count);
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            Assert.NotNull(state.JobTicksRequired);
+            Assert.NotNull(state.JobPayout);
+        }
+        [Fact]
+        public void JobManager_IncrementsTicks_OnUpdateEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, state,definitionManager);
+            state.Ticks = new BigNum(50);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(51), state.Ticks);
+        }
+        [Fact]
+        public void JobManager_ContinuesLoopingAfterCompletion_WhenSameJobSelected() {
 
 namespace ProjWizInc.Core.Definitions.Common {
     public class DefinitionEntity : DefinitionBase{
@@ -679,9 +525,7 @@ namespace ProjWizInc.Core.Definitions.Common {
 
 
 ==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Definitions\Common\IDefinitionComponentInterface.cs
 ==============================================================================
-using ProjWizInc.Core.Definitions.Components;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -689,14 +533,6 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace ProjWizInc.Core.Definitions.Common {
-    // This tells the Serializer: "When you see an IFeatureInterface, look for the $type field"
-    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-    // This maps the string "payout" in JSON to the actual C# class PayoutFeature
-    [JsonDerivedType(typeof(PayoutComponent), "payout")]
-    [JsonDerivedType(typeof(RequiresTicksComponent), "ticks")]
-    public interface IDefinitionComponentInterface {
-        //we can add some fields here later like name or description for tooltips or flavor
     }
 }
 

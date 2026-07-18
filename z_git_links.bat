@@ -1,40 +1,9 @@
 @echo off
-setlocal enabledelayedexpansion
+echo Running automated repository downloader...
+echo [Notice] z_gitlinks.ps1 is no longer needed. Running inline to prevent clipboard truncation.
+echo.
 
-:: 1. Define your GitHub base URL (Fixed to include /blob/master/)
-:: If your branch is 'main', change 'master' to 'main' below.
-set "BASE_URL=https://github.com/grimmsdottir/ProjWizInc/blob/master/"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$o='grimmsdottir';$r='ProjWizInc';$h=@{'User-Agent'='PS'};$b=(irm ('https://api.github.com/repos/'+$o+'/'+$r) -H $h).default_branch;$sha=(irm ('https://api.github.com/repos/'+$o+'/'+$r+'/branches/'+$b) -H $h).commit.commit.tree.sha;$tree=(irm ('https://api.github.com/repos/'+$o+'/'+$r+'/git/trees/'+$sha+'?recursive=1') -H $h).tree;$urls=[System.Collections.Generic.List[string]]::new();$w=[System.IO.StreamWriter]::new('z_solution_generated.txt');foreach($i in $tree){if($i.type -eq 'blob'){$ext=[System.IO.Path]::GetExtension($i.path).ToLower();if(@('.cs','.csproj','.sln','.json','.md','.txt') -contains $ext){$url='https://raw.githubusercontent.com/'+$o+'/'+$r+'/refs/heads/'+$b+'/'+[Uri]::EscapeUriString($i.path);$urls.Add($url);$w.WriteLine('='*80);$w.WriteLine('FILE: '+$i.path);$w.WriteLine('='*80);try{$w.WriteLine((irm $url -H $h))}catch{$w.WriteLine('Error')};$w.WriteLine();$w.WriteLine()}}};$w.Close();$urls|Out-File 'raw_links.txt' -Encoding utf8;Write-Host 'Codebase aggregated successfully!'"
 
-:: 2. Get the current directory
-set "ROOT_DIR=%~dp0"
-
-:: 3. Define the output file name
-set "OUTPUT_FILE=z_cs_links.txt"
-
-echo Generating filtered links for .cs files...
-
-:: Create/Overwrite the file and start the loop
-(
-    for /r %%f in (*.cs) do (
-        set "FULL_PATH=%%f"
-        
-        :: Filter: Skip files in 'obj' or 'bin' folders
-        set "SKIP=0"
-        echo !FULL_PATH! | findstr /i "\\obj\\" >nul && set "SKIP=1"
-        echo !FULL_PATH! | findstr /i "\\bin\\" >nul && set "SKIP=1"
-        
-        if !SKIP! equ 0 (
-            :: Remove the local root path
-            set "REL_PATH=!FULL_PATH:%ROOT_DIR%=!"
-            
-            :: Replace backslashes with forward slashes
-            set "URL_PATH=!REL_PATH:\=/!"
-            
-            :: Print the final direct link
-            echo !BASE_URL!!URL_PATH!
-        )
-    )
-) > "%OUTPUT_FILE%"
-
-echo Success! Links saved to %OUTPUT_FILE% (bin/obj files excluded).
+echo.
 pause

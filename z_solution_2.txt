@@ -1,0 +1,992 @@
+﻿==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\BigNumTests.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+
+namespace xUnitTester {
+    public class BigNumTests {
+        //reminder that our boundry is around 2e15
+        private const int NUM_0 = 0;
+        private const int NUM_1 = 1;
+        private const int NUM_SMALL = 1000;
+        private const double NUM_BIG = 1e25;
+        private static BigNum _tmpBigNumA;
+        private static BigNum _tmpBigNumB;
+        /*
+         * CONSTRUCTOR AND PATH TESTS
+         */
+        [Fact]
+        public void Constructor_SmallWholeNumber_IsNotLarge() {
+            BigNum val = new(NUM_SMALL);
+            //if val isLarge, than the test fails, otherwise it passes
+            Assert.False(val.IsLarge);
+        }
+        [Fact]
+        public void Constructor_BigNumber_IsLarge() {
+            BigNum val = new(NUM_BIG);
+            //if val is not Large, than the test fails, otherwise it passes
+            Assert.True(val.IsLarge);
+        }
+        [Theory]
+        [InlineData(150, 0, 1.5, 2)]          // Over 10: 150e0 -> 1.5e2
+        [InlineData(0.01, 5, 1.0, 3)]         // Under 1: 0.01e5 -> 1.0e3
+        [InlineData(950, 10, 9.5, 12)]        // Standard normalization
+        [InlineData(0.0001, -2, 1.0, -6)]     // Negative exponents
+        public void Constructor_AlwaysNormalizesCorrectly(double mIn, int eIn, double mExp, long eExp) {
+            // Act
+            var val = new BigNum(mIn, eIn);
+
+            // Assert
+            // We check the internal components. 
+            // (Note: You might need to make these internal or public for the test)
+            Assert.Equal(eExp, val.Exp);
+            Assert.Equal(mExp, val.Man, 5); // 5 decimal places of precision
+        }
+        [Theory]
+        [InlineData(150, 0, 150.0, false)]     // Integer -> Small Path
+        [InlineData(1.5, 2, 150.0, false)]     // Scientific (Small) -> Small Path
+        [InlineData(1.5, 20, 0.0, true)]       // Scientific (Huge) -> Large Path
+        [InlineData(0.01, 0, 0.01, false)]     // Decimal -> NOW Small Path (Previously Large)
+        [InlineData(1.23, -2, 0.0123, false)]  // Negative Exp -> NOW Small Path
+        public void Constructor_Normalization_PathCheck(double mIn, int eIn, double expectedSmall, bool expectedIsLarge) {
+            var val = new BigNum(mIn, eIn);
+
+            Assert.Equal(expectedIsLarge, val.IsLarge);
+
+            if (!expectedIsLarge) {
+                // Use precision: 15 to handle tiny floating point jitter
+                Assert.Equal(expectedSmall, val.Small, 15);
+            }
+        }
+        [Fact]
+        public void Constructor_ExtremeUnnormalized_NormalizesCorrectly() {
+            // 1,000,000e0 should become 1e6
+            var val = new BigNum(1_000_000, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(6, val.Exp);
+        }
+
+        [Fact]
+        public void Constructor_TinyDecimal_NormalizesCorrectly() {
+            // 0.000001e0 should become 1e-6
+            var val = new BigNum(0.000001, 0);
+
+            Assert.Equal(1.0, val.Man, 10);
+            Assert.Equal(-6, val.Exp);
+        }
+        [Fact]
+        public void Addition_CrossesThreshold_Successfully() {
+            // Arrange: Use a number just below long.MaxValue (approx 9e18)
+            BigNum a = new BigNum(9_000_000_000_000_000_000L);
+            BigNum b = new BigNum(2_000_000_000_000_000_000L);
+
+            // Act
+            BigNum result = a + b;
+
+            // Assert
+            Assert.True(result.IsLarge);
+            // 9e18 + 2e18 = 1.10e19
+            Assert.Equal("1.10e19", result.ToString());
+        }
+        [Fact]
+        public void Addition_MassivePlusTiny_HandlesAbsorption() {
+            BigNum massive = BigNum.Parse("1.00e25");
+            BigNum tiny = new BigNum(1);
+
+            BigNum result = massive + tiny;
+
+            // In a double-mantissa system, 1.00e25 + 1 is still 1.00e25
+            // This test ensures your normalization logic doesn't freak out.
+            Assert.Equal("1.00e25", result.ToString());
+        }
+        [Theory]
+        [InlineData("0.5", "0.5", "1")]      // Two halves make a whole
+        [InlineData("0.1", "10", "1")]       // Multiplication test: 0.1 * 10 = 1
+        public void Decimals_CalculateCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            // Test both addition and multiplication
+            if (valB == "0.5") Assert.Equal(expected, (a + b).ToString());
+            if (valB == "10") Assert.Equal(expected, (a * 10).ToString());
+        }
+        [Theory]
+        [InlineData("1.00e10", "5.00e9", true)]  // Scientific vs Scientific (Different exponents)
+        [InlineData("1000", "999", true)]        // Long vs Long
+        [InlineData("1.00e3", "999", true)]      // Scientific vs Long
+        [InlineData("500", "1.00e2", true)]      // Long vs Scientific
+        public void Comparison_GreaterAndLess_Works(string big, string small, bool expected) {
+            BigNum a = BigNum.Parse(big);
+            BigNum b = BigNum.Parse(small);
+
+            Assert.Equal(expected, a > b);
+            Assert.Equal(!expected, a < b);
+        }
+        //check if we can read valid numbers correctly
+        [Theory]
+        [InlineData("100", 100)]
+        [InlineData("12.5", 12.5)]
+        [InlineData("1.0e10", 10000000000)]
+        [InlineData("  500  ", 500)] // Testing the Trim()
+        public void Parse_ValidatesAllFormats(string input, double expectedValue) {
+            var result = BigNum.Parse(input);
+            // You'll need an explicit/implicit cast to double for this assertion
+            //Assert.Equal(expectedValue, (double)result);
+        }
+        [Theory]
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("99", "100", true)]    // Less than
+        [InlineData("101", "100", false)]  // Greater than (should fail <=)
+        public void Operator_LessThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            bool result = a <= b;
+
+            Assert.Equal(expected, result);
+        }
+        [Theory]
+        [InlineData("100", "100", true)]   // Exactly equal (Small)
+        [InlineData("1.00e10", "1.00e10", true)] // Exactly equal (Large)
+        [InlineData("101", "100", true)]   // Greater than
+        [InlineData("99", "100", false)]   // Less than (should fail >=)
+        public void Operator_GreaterThanOrEqual_Works(string valA, string valB, bool expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+
+            bool result = a >= b;
+
+            Assert.Equal(expected, result);
+        }
+        [Fact]
+        public void Operator_Increment_SmallNumber_AddsOne() {
+            BigNum a = new BigNum(99);
+
+            // In C#, prefix/postfix ++ modifies the variable
+            a++;
+
+            Assert.Equal(new BigNum(100), a);
+        }
+
+        [Fact]
+        public void Operator_Increment_LargeNumber_AborbsOne() {
+            BigNum a = BigNum.Parse("1.00e20");
+            a++;
+            // Ticks should absorb the 1 and stay at 1.00e20 [3]
+            Assert.Equal("1.00e20", a.ToString());
+        }
+        [Theory]
+        // === CATEGORY 1: SMALL PATH / SMALL PATH (Result fits in double) ===
+        [InlineData("10", "20", "30")]               // Simple whole-number addition
+        [InlineData("12.5", "5.5", "18")]            // Decimals addition
+        [InlineData("0.0001", "0.0002", "0.0003")]   // Tiny decimals on the small path
+
+        // === CATEGORY 2: SMALL TO LARGE THRESHOLD PROMOTION (Crossing over 1e15) ===
+        // 9.0e14 (small) + 2.0e14 (small) = 1.1e15. Since 1.1e15 is above 1e15, 
+        // the constructor must promote the sum to the scientific large path: "1.10e15"
+        [InlineData("9.00e14", "2.00e14", "1.10e15")]
+
+        // === CATEGORY 3: LARGE PATH / LARGE PATH (Same Exponents) ===
+        [InlineData("1.50e20", "2.50e20", "4.00e20")] // Standard same exponent addition
+        [InlineData("5.00e20", "5.00e20", "1.00e21")] // Addition resulting in coefficient normalization (10e20 -> 1e21)
+
+        // === CATEGORY 4: LARGE PATH / LARGE PATH (Different Exponents, Within 15 Orders) ===
+        [InlineData("1.50e20", "2.00e18", "1.52e20")] // a is larger: 150e18 + 2e18 = 152e18 -> 1.52e20
+        [InlineData("2.00e18", "1.50e20", "1.52e20")] // b is larger: 2e18 + 150e18 = 152e18 -> 1.52e20 (Verifies operand swapping!)
+
+        // === CATEGORY 5: SCALE LIMITS (expDiff exceeds 15) ===
+        [InlineData("1.50e50", "2.00e20", "1.50e50")] // a >> b (Returns a)
+        [InlineData("2.00e20", "1.50e50", "1.50e50")] // b >> a (Returns b via operand swapping!)
+
+        // === CATEGORY 6: SIGN VARIATIONS (Mismatched signs redirecting to subtraction) ===
+        [InlineData("10", "-3", "7")]                 // Positive plus negative (small)
+        [InlineData("-10", "3", "-7")]                // Negative plus positive (small)
+        [InlineData("1.50e20", "-2.00e18", "1.48e20")]  // Positive plus negative (large)
+        [InlineData("-1.50e20", "2.00e18", "-1.48e20")] // Negative plus positive (large)
+        public void Operator_Addition_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+            BigNum expectedBigNum = BigNum.Parse(expected);
+            BigNum result = a + b;
+
+            Assert.True(expectedBigNum == result, "Expected: " + expectedBigNum.ToString() + ", Actual: " + result.ToString());
+        }
+        // === CATEGORY 1: SMALL PATH / SMALL PATH (Result fits in double) ===
+        [InlineData("100", "30", "70")]             // Simple whole-number subtraction
+        [InlineData("12.5", "5.5", "7")]            // Decimals subtraction
+        [InlineData("10", "20", "-10")]             // Small crossing below zero
+
+        // === CATEGORY 2: LARGE TO SMALL THRESHOLD CROSSING (Collapsing under 1e15) ===
+        // 1.01e15 (large) - 2.0e13 (large) = 9.9e14. Since 9.9e14 is below 1e15, 
+        // the constructor must collapse it back to the small path double string "990000000000000"
+        [InlineData("1.01e15", "2.00e13", "990000000000000")]
+
+        // === CATEGORY 3: LARGE PATH / LARGE PATH (Same Exponents) ===
+        [InlineData("5.00e20", "2.00e20", "3.00e20")] // Standard same exponent subtraction
+        [InlineData("1.50e20", "1.50e20", "0")]       // Identity subtraction resulting in 0
+
+        // === CATEGORY 4: LARGE PATH / LARGE PATH (Different Exponents, Within 15 Orders) ===
+        [InlineData("1.50e20", "2.00e18", "1.48e20")]   // 150.0e18 - 2.0e18 = 148.0e18 -> 1.48e20
+        [InlineData("2.50e18", "1.50e20", "-1.475e20")] // 2.5e18 - 150.0e18 = -147.5e18 -> -1.475e20
+
+        // === CATEGORY 5: SCALE LIMITS (expDiff exceeds 15) ===
+        [InlineData("1.50e50", "2.00e20", "1.50e50")]   // a >> b (Returns a)
+        [InlineData("2.00e20", "1.50e50", "-1.50e50")]  // b >> a (Returns -b via our symmetric fix!)
+
+        // === CATEGORY 6: SIGN VARIATIONS (Equal signs) ===
+        [InlineData("-100", "-30", "-70")]           // Negative minus negative (small)
+        [InlineData("-1.50e20", "-2.00e18", "-1.48e20")] // Negative minus negative (large)
+        public void Operator_Subtraction_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+            BigNum expectedBigNum = BigNum.Parse(expected);
+            BigNum result = a - b;
+
+            Assert.True(expectedBigNum == result, "Expected: " + expectedBigNum.ToString() + ", Actual: " + result.ToString());
+        }
+        [Theory]
+        // === CATEGORY 1: SMALL PATH / SMALL PATH (Result fits in double) ===
+        [InlineData("10", "20", "200")]             // Simple whole-number multiplication
+        [InlineData("0.5", "10", "5")]              // Fractional multiplication
+        [InlineData("1.5", "2.5", "3.75")]          // Small decimals
+
+        // === CATEGORY 2: SMALL PATH TO LARGE PATH TRANSITIONS ===
+        // Large values constructed as small-path doubles, crossing our 1e15 boundary
+        [InlineData("2.00e10", "3.00e10", "6.00e20")] // 2e10 * 3e10 = 6e20
+        [InlineData("5.00e8", "5.00e8", "2.50e17")]   // 5e8 * 5e8 = 2.5e17 (above 1e15)
+
+        // === CATEGORY 3: LARGE PATH / LARGE PATH (Direct scale summation) ===
+        [InlineData("2.00e20", "3.00e10", "6.00e30")] // Exponent addition (20 + 10 = 30)
+
+        // === CATEGORY 4: LARGE PATH WITH MANTISSA NORMALIZATION (Coefficient >= 10) ===
+        // 5.0e20 * 4.0e10 = 20.0e30. Normalizes 20.0 down to 2.0, shifting exponent to 31.
+        [InlineData("5.00e20", "4.00e10", "2.00e31")]
+        // 5.0e20 * 5.0e-22 = 25.0e-2. Normalizes 25.0 to 2.5, exp to -1 (0.25 on the small path)
+        [InlineData("5.00e20", "5.00e-22", "0.25")]
+
+        // === CATEGORY 5: SIGN VARIATIONS ===
+        [InlineData("-10", "5", "-50")]             // Negative dividend
+        [InlineData("10", "-5", "-50")]             // Negative divisor
+        [InlineData("-10", "-5", "50")]             // Both negative
+        [InlineData("-2.00e20", "3.00e10", "-6.00e30")] // Large negative dividend
+        [InlineData("2.00e20", "-3.00e10", "-6.00e30")] // Large negative divisor
+        [InlineData("-2.00e20", "-3.00e10", "6.00e30")]  // Large both negative
+
+        // === CATEGORY 6: DECIMAL BOUNDARIES / TINY DECIMALS ===
+        [InlineData("1.50e-10", "2.00e-15", "3.00e-25")] // Tiny fractional multiplication
+        // 2.0e-5 * 5.0e-6 = 10.0e-11. Normalizes 10.0 to 1.0, exp to -10.
+        [InlineData("2.00e-5", "5.00e-6", "1.00e-10")]
+
+        // === CATEGORY 7: ZERO MULTIPLICATION LIMITS ===
+        [InlineData("1.00e50", "0", "0")]           // Large positive multiplied by zero
+        [InlineData("0", "-2.50e20", "0")]          // Zero multiplied by large negative
+        public void Operator_Multiplication_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = BigNum.Parse(valA);
+            BigNum b = BigNum.Parse(valB);
+            BigNum expectedBigNum = BigNum.Parse(expected);
+            BigNum result = a * b;
+
+            Assert.True(expectedBigNum == result, "Expected: " + expectedBigNum.ToString() + ", Actual: " + result.ToString());
+        }
+        [Theory]
+        // === CATEGORY 1: SMALL PATH / SMALL PATH (Result fits in double) ===
+        [InlineData("10", "5", "2")]                // Simple exact division
+        [InlineData("1", "2", "0.5")]              // Fractional result
+        [InlineData("7.5", "2.5", "3")]            // Decimals division
+
+        // === CATEGORY 2: LARGE PATH / LARGE PATH (Same Exponents) ===
+        [InlineData("8.00e20", "2.00e20", "4")]     // Standard division (Outputs small path "4")
+        [InlineData("1.50e20", "3.00e20", "0.5")]   // Outputs small path "0.5"
+
+        // === CATEGORY 3: LARGE PATH / LARGE PATH (Different Exponents) ===
+        [InlineData("1.00e30", "1.00e10", "1.00e20")]  // Exponent subtraction (30 - 10 = 20)
+        [InlineData("6.00e50", "3.00e20", "2.00e30")]  // Exponent subtraction with coefficients
+        [InlineData("2.50e15", "5.00e30", "5.00e-16")] // Negative exponent shift (15 - 30 = -15)
+
+        // === CATEGORY 4: MIXED PATH (Large Dividend, Small Divisor) ===
+        [InlineData("1.00e20", "100", "1.00e18")]   // Dividing large by small whole number
+        [InlineData("1.50e16", "3", "5.00e15")]     // Dividing large by small decimal-scale
+
+        // === CATEGORY 5: MIXED PATH (Small Dividend, Large Divisor) ===
+        [InlineData("1", "1.00e16", "1.00e-16")]    // Dividend is much smaller than divisor
+        [InlineData("500", "1.00e20", "5.00e-18")]  // Exponent shifting down past boundaries
+
+        // === CATEGORY 6: SIGN VARIATIONS ===
+        [InlineData("-10", "2", "-5")]              // Negative dividend
+        [InlineData("10", "-2", "-5")]              // Negative divisor
+        [InlineData("-10", "-2", "5")]              // Both negative
+        [InlineData("-1.00e30", "1.00e10", "-1.00e20")] // Large negative dividend
+        [InlineData("1.00e30", "-1.00e10", "-1.00e20")] // Large negative divisor
+        [InlineData("-1.00e30", "-1.00e10", "1.00e20")] // Large both negative
+
+        // === CATEGORY 7: ZERO DIVIDENDS (Division of zero is always zero) ===
+        [InlineData("0", "100", "0")]               // Zero divided by small
+        [InlineData("0", "1.00e30", "0")]           // Zero divided by large
+        public void Operator_Division_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum b = new BigNum(valB);
+            BigNum expectedBigNum = new BigNum(expected);
+            BigNum result = a / b;
+            Assert.True(expectedBigNum == result, "Expected: " + expectedBigNum.ToString() + ", Actual: " + result.ToString());
+
+        }
+        private void ExecuteDivisionUnderTest() {
+            BigNum result = _tmpBigNumA / _tmpBigNumB;
+        }
+        [Theory]
+        [InlineData("10")]          // Small positive divided by zero
+        [InlineData("-10")]         // Small negative divided by zero
+        [InlineData("1.00e20")]     // Large positive divided by zero
+        [InlineData("-1.00e20")]    // Large negative divided by zero
+        [InlineData("0")]           // Zero divided by zero (NaN check)
+        public void Operator_Division_ByZero_ThrowsDivideByZeroException(string valA) {
+            // Arrange
+            _tmpBigNumA = new BigNum(valA);
+            _tmpBigNumB = new BigNum(0);
+
+            // Act & Assert
+            // We pass the method group directly to verify it throws the standard exception
+            Assert.Throws<DivideByZeroException>(ExecuteDivisionUnderTest);
+        }
+        [Theory]
+        // === CATEGORY 1: SMALL PATH (Positive to Negative) ===
+        [InlineData("10", "-10")]                  // Small whole number
+        [InlineData("125.5", "-125.5")]            // Small decimal
+        [InlineData("150000", "-150000")]          // Large whole number on the small path
+
+        // === CATEGORY 2: SMALL PATH (Negative to Positive) ===
+        [InlineData("-10", "10")]                  // Small whole number
+        [InlineData("-125.5", "125.5")]            // Small decimal
+        [InlineData("-150000", "150000")]          // Large whole number on the small path
+
+        // === CATEGORY 3: LARGE PATH (Positive to Negative) ===
+        [InlineData("1.50e20", "-1.50e20")]        // Standard large exponent
+        [InlineData("2.25e50", "-2.25e50")]        // Very large exponent
+        [InlineData("1.00e100", "-1.00e100")]      // Centillion-scale exponent
+
+        // === CATEGORY 4: LARGE PATH (Negative to Positive) ===
+        [InlineData("-1.50e20", "1.50e20")]        // Standard large exponent
+        [InlineData("-2.25e50", "2.25e50")]        // Very large exponent
+        [InlineData("-1.00e100", "1.00e100")]      // Centillion-scale exponent
+
+        // === CATEGORY 5: DECIMAL BOUNDARIES (Exponents <= -4) ===
+        // Below 1e-4, the constructor switches to the Large path to preserve visual clarity.
+        [InlineData("1.50e-5", "-1.50e-5")]        // Tiny fractional positive to negative
+        [InlineData("-1.50e-5", "1.50e-5")]        // Tiny fractional negative to positive
+        [InlineData("3.25e-25", "-3.25e-25")]      // Extremely small decimal positive to negative
+        [InlineData("-3.25e-25", "3.25e-25")]      // Extremely small decimal negative to positive
+
+        // === CATEGORY 6: ZERO BOUNDARY (Zero must remain unsigned) ===
+        [InlineData("0", "0")]                     // Standard positive zero
+        [InlineData("0.0", "0")]                   // Decimal zero
+        [InlineData("-0", "0")]                    // Negative zero must resolve to unsigned zero
+        public void Operator_Negation_CalculatesCorrectly(string valA, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum expectedBigNum = new BigNum(expected);
+            BigNum result = -a;
+
+            Assert.True(expectedBigNum == result, "Expected: " + expectedBigNum.ToString() + ", Actual: " + result.ToString());
+        }
+        // === CATEGORY 1: SMALL PATH (Both are below 1e15) ===
+        [InlineData("10", "3", "1")]                // Standard whole-number modulo
+        [InlineData("25", "5", "0")]                // Exact divisibility
+        [InlineData("12.5", "5", "2.5")]            // Small decimals
+        // === CATEGORY 2: MIXED PATH (Large Dividend, Small Divisor) ===
+        // 1.500001e16 % 3.0e5. expDiff = 11 (within 15). 
+        // scaledManA = 150000100000. resultMan = 150000100000 % 3 = 1.0. 
+        // 1.0e5 is below 1e15, so returns small path string.
+        [InlineData("1.500001e16", "3.0e5", "100000")]
+        // === CATEGORY 3: LARGE PATH (Same Exponents, Mantissa Modulo) ===
+        [InlineData("1.5e16", "3.0e15", "0")]       // 15.0e15 % 3.0e15 = 0
+        [InlineData("2.5e16", "4.0e16", "2.50e16")] // |a| < |b| with same exponents
+        // === CATEGORY 4: LARGE PATH (Different Exponents, Within 15 Orders) ===
+        [InlineData("1.5e20", "4.0e18", "2.00e18")] // 150.0e18 % 4.0e18 = 2.0e18
+        [InlineData("2.5e25", "6.0e24", "1.00e24")] // 25.0e24 % 6.0e24 = 1.0e24
+        // === CATEGORY 5: SIGN VARIATIONS (Sign is determined by Dividend 'a') ===
+        [InlineData("-10", "3", "-1")]              // Negative dividend, positive divisor
+        [InlineData("10", "-3", "1")]               // Positive dividend, negative divisor
+        [InlineData("-10", "-3", "-1")]             // Negative dividend, negative divisor
+        [InlineData("-1.5e20", "4.0e18", "-2.00e18")] // Large negative dividend
+        [InlineData("1.5e20", "-4.0e18", "2.00e18")]  // Large negative divisor
+        // === CATEGORY 6: SCALE LIMITS (expDiff exceeds 15) ===
+        // True remainder is lost to double precision limits. Return fallback 0.
+        [InlineData("1.0e30", "1.0e10", "0")]
+        [InlineData("1.5e50", "2.0e20", "0")]
+        // === CATEGORY 7: DIVISOR DOMINANT (|a| < |b| returns 'a') ===
+        [InlineData("5", "10", "5")]                // Small divisor dominant
+        [InlineData("1.5e20", "3.0e25", "1.50e20")] // Large divisor dominant
+        public void Operator_Modulo_CalculatesCorrectly(string valA, string valB, string expected) {
+            BigNum a = new BigNum(valA);
+            BigNum b = new BigNum(valB);
+            BigNum result = a % b;
+            Assert.Equal(expected, result.ToString());
+        }
+    }
+}
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\BootstrapperTests.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace xUnitTester {
+    public class BootstrapperTests {
+        [Fact]
+        public void Bootstrapper_CanBuildValidContext_InMemory() {
+            // Arrange
+            GameDefinitions definitions = new GameDefinitions();
+
+            ResourceDefinition testGold = new ResourceDefinition();
+            testGold.Key = "gold";
+            testGold.DisplayName = "Gold";
+            definitions.Resources.Add(testGold);
+
+            GameState gameState = new GameState();
+            gameState.economyState.Resources = new BigNum[1];
+            gameState.economyState.Resources[0] = 0;
+
+            // Act
+            CoreContext context = Bootstrapper.BuildContext(definitions, gameState);
+
+            // Assert
+            Assert.NotNull(context);
+            Assert.NotNull(context.GetTimeState());
+            Assert.Equal(0, context.GetTimeState().TimeElapsed);
+        }
+
+        [Fact]
+        public void Bootstrapper_InitializesResourceArrayCorrectly() {
+            // Arrange
+            GameDefinitions gameDefinitions = new GameDefinitions();    
+            GameState gameState = new GameState();
+            
+            // Act
+            CoreContext context = Bootstrapper.BuildContext(gameDefinitions, gameState);
+            
+            // Assert
+            Assert.NotNull(gameState.economyState.Resources);
+            Assert.Equal(2, gameState.economyState.Resources.Length);
+        }
+
+        [Fact]
+        public void Bootstrapper_BuildsAllManagers() {
+            // Arrange
+            GameDefinitions definitions = new GameDefinitions();
+            GameState gameState = new GameState();
+            gameState.economyState.Resources = new BigNum[0];
+            
+            // Act
+            CoreContext context = Bootstrapper.BuildContext(definitions, gameState);
+            
+            // Assert
+            Assert.NotNull(context.DefinitionManager);
+            Assert.NotNull(context.EventManager);
+            Assert.NotNull(context.EconomyManager);
+            Assert.NotNull(context.GameLoopManager);
+            Assert.NotNull(context.JobManager);
+            Assert.NotNull(context.TimeManager);
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\SerialisationServiceTests.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Persistence;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace xUnitTester {
+    public class SerialisationServiceTests {
+        [Fact]
+        public void BigNumJsonConverter_CanDeserialize_ScientificString() {
+            JsonSerializerOptions options = new JsonSerializerOptions();
+            options.Converters.Add(new BigNumJsonConverter());
+
+            string jsonString = "\"1.50e2\"";
+            BigNum result = JsonSerializer.Deserialize<BigNum>(jsonString, options);
+
+            // 1.50e2 is 150, which should fall within the small path
+            Assert.False(result.IsLarge);
+            Assert.Equal(150.0, result.Small, 5);
+        }
+        [Fact]
+        public void BigNumJsonConverter_CanDeserialize_LargeScientificString() {
+            JsonSerializerOptions options = new JsonSerializerOptions();
+            options.Converters.Add(new BigNumJsonConverter());
+
+            string jsonString = "\"1.00e20\"";
+            BigNum result = JsonSerializer.Deserialize<BigNum>(jsonString, options);
+
+            // 1.00e20 exceeds the 1e15 threshold, so it should use the large path
+            Assert.True(result.IsLarge);
+            Assert.Equal(20, result.Exp);
+            Assert.Equal(1.0, result.Man, 5);
+        }
+        [Fact]
+        public void BigNumJsonConverter_CanDeserialize_Number() {
+            JsonSerializerOptions options = new JsonSerializerOptions();
+            options.Converters.Add(new BigNumJsonConverter());
+
+            string jsonString = "123.4";
+            BigNum result = JsonSerializer.Deserialize<BigNum>(jsonString, options);
+
+            Assert.False(result.IsLarge);
+            Assert.Equal(123.4, result.Small, 5);
+        }
+        [Fact]
+        public void DynamicComponents_CanPolymorphicallyDeserialize() {
+            // Setup serialization options with the custom BigNum converter registered
+            JsonSerializerOptions options = new JsonSerializerOptions {
+                PropertyNameCaseInsensitive = true
+            };
+            options.Converters.Add(new BigNumJsonConverter());
+
+            // Attempting to parse a polymorphic list of components
+            string jsonString = "[" +
+                                "  { \"$type\": \"ticks\", \"RequiredTicks\": \"1.00e2\" }," +
+                                "  { \"$type\": \"payout\", \"PayoutEntries\": [] }" +
+                                "]";
+
+            IDefinitionComponentInterface[] components = JsonSerializer.Deserialize<IDefinitionComponentInterface[]>(jsonString, options);
+
+            Assert.NotNull(components);
+            Assert.Equal(2, components.Length);
+
+            Assert.True(components[0] is RequiresTicksComponent);
+            RequiresTicksComponent ticksComponent = (RequiresTicksComponent)components[0];
+            Assert.Equal(new BigNum(100), ticksComponent.RequiredTicks);
+
+            Assert.True(components[1] is PayoutComponent);
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\TestHelpers.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Managers;
+
+namespace xUnitTester {
+    public class TestHelpers {
+        public const string TEST_GOLD_KEY = "gold";
+        public const int TEST_GOLD_ID = 0;
+        public const string TEST_JOB_KEY = "mine";
+        public const int TEST_JOB_ID = 0;
+        public static readonly BigNum TEST_PAYOUT_AMOUNT = new BigNum(12.34);
+        public static readonly BigNum TEST_REQUIRED_TICKS = new BigNum(100);
+        public static ResourceDefinition CreateTestGoldResourceDefinition() {
+            ResourceDefinition testGold = new ResourceDefinition();
+            testGold.Key = TEST_GOLD_KEY;
+            testGold.Id = TEST_GOLD_ID;
+            return testGold;
+        }
+        public static ResourcePayoutEntry CreateTestPayoutEntry() {
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
+            testPayoutEntry.ResourceKey = testGold.Key;
+            testPayoutEntry.ResourceID = testGold.Id;
+            testPayoutEntry.Amount = TEST_PAYOUT_AMOUNT;
+            return testPayoutEntry;
+        }
+        public static PayoutComponent CreateTestPayoutComponent() {
+            PayoutComponent testPayoutComponent = new PayoutComponent();
+            testPayoutComponent.PayoutEntries.Add(CreateTestPayoutEntry());
+            return testPayoutComponent;
+        }
+        public static RequiresTicksComponent CreateTestTicksComponent() {
+            RequiresTicksComponent testTicksComponent = new RequiresTicksComponent();
+            testTicksComponent.RequiredTicks = TEST_REQUIRED_TICKS;
+            return testTicksComponent;
+        }
+        public static JobDefinition CreateTestJobDefinition() {
+            JobDefinition testJob = new JobDefinition();
+            testJob.Key = TEST_JOB_KEY;
+            testJob.Id = TEST_JOB_ID;
+            testJob.Components.Add(CreateTestPayoutComponent());
+            testJob.Components.Add(CreateTestTicksComponent());
+            return testJob;
+        }
+        public static IEnumerable<object[]> GetValidDefinitions() {
+            List<object[]> testData = new List<object[]>();
+
+            ResourceDefinition resourceDef = CreateTestGoldResourceDefinition();
+            testData.Add(new object[] { resourceDef });
+
+            JobDefinition jobDef = CreateTestJobDefinition();
+            testData.Add(new object[] { jobDef });
+
+            return testData;
+        }
+        [Theory]
+        [MemberData(nameof(GetValidDefinitions))]
+        public void TestDefinition_HasValidKeyAndId(DefinitionBase definition) {
+            DefinitionBase castedDef = definition;
+            Assert.NotEmpty(castedDef.Key);
+            Assert.True(castedDef.Id >= 0);
+        }
+        public static GameDefinitions CreateTestingGameDefinitions() {
+            GameDefinitions gameDefinitions = new GameDefinitions();
+            gameDefinitions.Resources.Add(CreateTestGoldResourceDefinition());
+            gameDefinitions.Jobs.Add(CreateTestJobDefinition());
+            return gameDefinitions;
+        }
+        [Fact]
+        public void CreateTestingGameDefinitions_CreatesValidDefinitions() {
+            GameDefinitions definitions = CreateTestingGameDefinitions();
+            Assert.NotNull(definitions);
+            Assert.NotEmpty(definitions.Resources);
+            Assert.NotEmpty(definitions.Jobs);
+            Assert.Equal(TEST_GOLD_KEY, definitions.Resources[0].Key);
+            Assert.Equal(TEST_JOB_KEY, definitions.Jobs[0].Key);
+        }
+        public static DefinitionManager CreateTestingDefinitionManager() {
+            BigNum AMOUNT = new BigNum(69.69);
+            //to build a DefinitionManager, we need a whole bunch of stuff
+            //first are the dicts
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
+            Dictionary<Type, Array> typeIdDefMap = [];
+            //manually create some testing definitions
+            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
+            //jobs are quite a bit more complex because of their components
+            JobDefinition testJob = CreateTestJobDefinition();
+
+            ResourceDefinition[] resourceIdDefMap = new ResourceDefinition[1];
+            resourceIdDefMap[0] = testGold;
+            Dictionary<string, int> resourceKeyIdMap= [];
+            resourceKeyIdMap.Add(testGold.Key, testGold.Id);
+            JobDefinition[] jobIdDefMap = new JobDefinition[1];
+            jobIdDefMap[0] = testJob;
+            Dictionary<string, int> jobKeyIdMap = [];
+            jobKeyIdMap.Add(testJob.Key, testJob.Id);
+
+            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
+            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
+
+            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
+            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
+
+            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+        }
+        /*
+        public static JobManager CreateTestJobManager() {
+            JobManager testJobManager = new JobManager()
+        }
+        */
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\DefinitionManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using ProjWizInc.Core.Definitions.Entries;
+using ProjWizInc.Core.ADT;
+
+namespace xUnitTester.Managers {
+    public class DefinitionManagerTests {
+        [Fact]
+        public void TestHelpers_BuildsCorrectDefinitionManager() {
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            IReadOnlyDictionary<Type, Dictionary<string, int>> typeKeyIdMap = definitionManager.GetAllTypeKeyIdMaps();
+            IReadOnlyDictionary< Type, Array > typeIdDefMap = definitionManager.GetAllTypeIdDefMaps();
+            Assert.NotNull(typeKeyIdMap);
+            Assert.NotNull(typeIdDefMap);
+
+
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            //check if the jobdefinition is valid
+            Assert.NotNull(jobDefinition);
+            Assert.Equal("mine",jobDefinition.Key);
+            Assert.Equal(0, jobDefinition.Id);
+
+            PayoutComponent payoutComponent= jobDefinition.GetComponent<PayoutComponent>();
+            Assert.NotNull(payoutComponent);
+            Assert.NotNull(payoutComponent.PayoutEntries);
+            ResourcePayoutEntry resourcePayoutEntry = payoutComponent.PayoutEntries[0];
+            Assert.NotNull(resourcePayoutEntry);
+            Assert.Equal("gold", resourcePayoutEntry.ResourceKey);
+            Assert.Equal(0, resourcePayoutEntry.ResourceID);
+            Assert.Equal(new BigNum(12.34), resourcePayoutEntry.Amount);
+
+            ResourceDefinition resourceDefinition = definitionManager.GetDefinition<ResourceDefinition>(0);
+            Assert.NotNull(resourceDefinition);
+            Assert.Equal("gold",resourceDefinition.Key);
+            Assert.Equal(0,resourceDefinition.Id);
+
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EconomyManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Events;
+using System.Runtime.CompilerServices;
+
+namespace xUnitTester.Managers {
+    public class EconomyManagerTests {
+        [Fact]
+        public void AddResource_ViaEvent_UpdatesStateCorrectly() {
+            const double AMMOUNT_TO_ADD = 100.50;
+            EventManager eventManager = new EventManager();
+            EconomyState economyState = new EconomyState();
+            economyState.Resources = new BigNum[1];
+            economyState.Resources[0] = new BigNum(0);
+
+            EconomyManager economyManager = new EconomyManager(eventManager,economyState);
+
+            BigNum amountToAdd = new BigNum(AMMOUNT_TO_ADD);
+            int goldId = 0;
+
+            eventManager.Publish(new ResourceGainedEvent(goldId,amountToAdd));
+
+            BigNum currentBalance = economyState.Resources[goldId];
+            bool isEqual = currentBalance == AMMOUNT_TO_ADD;
+            Assert.True(isEqual, "Expected: "+ amountToAdd+", Actual: "+ currentBalance);
+            
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\EventManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace xUnitTester.Managers {
+    public class EventManagerTests {
+        private bool _heard = false;
+        private void TestBroadcast(UpdateLogicEvent e) {
+            _heard = true;
+        }
+        [Fact]
+        public void EventManager_WorksInTests() {
+            EventManager eventManager = new EventManager();
+            _heard = false;
+            eventManager.Subscribe<UpdateLogicEvent>(TestBroadcast);
+            eventManager.Publish<UpdateLogicEvent>(new UpdateLogicEvent());
+            Assert.True(_heard, "The event manager cant heard its own broadcast");
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\JobManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using ProjWizInc.Core.Definitions;
+using xUnitTester;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Definitions.Blueprints;
+
+namespace xUnitTester.Managers {
+    
+    public class JobManagerTests {
+        private bool _eventFired = false;
+        private void OnResourceGained(ResourceGainedEvent e) {
+            _eventFired = true;
+        }
+        private void JobCompleted(JobCompleted e) {
+            _eventFired = true;
+        }
+        [Fact]
+        public void JobManager_Update_CompletesJob_WhenTicksReached() {
+            
+            EventManager eventManager = new EventManager();
+            JobState jobState = new JobState();
+            jobState.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
+            jobState.Ticks = new BigNum(99);
+            _eventFired = false;
+            jobState.ActiveJobId = 0;
+            eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(0), jobState.Ticks);
+            Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
+        }
+        [Fact]
+        public void Prove_Type_Consistency() {
+            // Type used by the Test
+            Type testType = typeof(UpdateLogicEvent);
+
+            // Type used by the Core
+            Type coreType = typeof(ProjWizInc.Core.Events.UpdateLogicEvent);
+
+            // If this assertion fails, you have a duplicate file causing an assembly mismatch!
+            Assert.Equal(coreType.AssemblyQualifiedName, testType.AssemblyQualifiedName);
+        }
+        [Fact]
+        public void JobManager_ManualComplete_PublishesEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            _eventFired = false;
+            eventManager.Subscribe<JobCompleted>(JobCompleted);
+            jobManager.CompleteJob();
+            Assert.True(_eventFired, "CompleteJob() was called, but no event was published");
+        }
+        [Fact]
+        public void JobManager_CachesStateOnConstruction() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobDefinition jobDefinition = definitionManager.GetDefinition<JobDefinition>(0);
+            Assert.NotNull(jobDefinition);
+            Assert.Equal(2, jobDefinition.Components.Count);
+            JobManager jobManager = new JobManager(eventManager,state,definitionManager);
+            Assert.NotNull(state.JobTicksRequired);
+            Assert.NotNull(state.JobPayout);
+        }
+        [Fact]
+        public void JobManager_IncrementsTicks_OnUpdateEvent() {
+            EventManager eventManager = new EventManager();
+            JobState state = new JobState();
+            state.ActiveJobId = 0;
+            DefinitionManager definitionManager = TestHelpers.CreateTestingDefinitionManager();
+            JobManager jobManager = new JobManager(eventManager, state,definitionManager);
+            state.Ticks = new BigNum(50);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(new BigNum(51), state.Ticks);
+        }
+        [Fact]
+        public void JobManager_ContinuesLoopingAfterCompletion_WhenSameJobSelected() {
+
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\xUnitTester\Managers\TimeManagerTests.cs
+==============================================================================
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+
+
+
+
+namespace xUnitTester.Managers {
+    public class TimeManagerTests {
+        [Fact]
+        public void TimeManager_StartsAtZero() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+            TimeManager timeManager = new TimeManager(eventManager,timeState);
+            Assert.Equal(0, timeManager.GetTime());
+            Assert.Equal(0, timeManager.State.TicksElapsed);
+        }
+        [Fact]
+        public void TimeManager_IncrementsTicks_OnUpdateEvent() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+            eventManager.Publish(new UpdateLogicEvent());
+            Assert.Equal(1, timeManager.State.TicksElapsed);
+            Assert.Equal(0, timeManager.GetTime());
+        }
+        [Fact]
+        public void TimeManager_TicksRolloverToSeconds_AtTpsThreshold() {
+            EventManager eventManager = new EventManager();
+            TimeState timeState = new TimeState();
+            timeState.TicksElapsed = 0;
+            timeState.TimeElapsed = 0;
+
+            TimeManager timeManager = new TimeManager(eventManager, timeState);
+
+            // Publish exactly the number of ticks required for 1 second (100 ticks)
+            int ticksNeeded = Globals.LOGIC_TPS;
+            for (int i = 0; i < ticksNeeded; i++) {
+                eventManager.Publish(new UpdateLogicEvent());
+            }
+
+            // Ticks should reset back to 0, and TimeElapsed should increment to 1
+            Assert.Equal(0, timeManager.State.TicksElapsed);
+            Assert.Equal(1, timeManager.State.TimeElapsed);
+            Assert.Equal(1, timeManager.GetTime());
+        }
+    }
+}
+
+

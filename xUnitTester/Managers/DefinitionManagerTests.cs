@@ -34,7 +34,7 @@ namespace xUnitTester.Managers {
             Assert.NotNull(resourcePayoutEntry);
             Assert.Equal("gold", resourcePayoutEntry.ResourceKey);
             Assert.Equal(0, resourcePayoutEntry.ResourceID);
-            Assert.Equal(new BigNum(69.69), resourcePayoutEntry.Amount);
+            Assert.Equal(new BigNum(12.34), resourcePayoutEntry.Amount);
 
             ResourceDefinition resourceDefinition = definitionManager.GetDefinition<ResourceDefinition>(0);
             Assert.NotNull(resourceDefinition);

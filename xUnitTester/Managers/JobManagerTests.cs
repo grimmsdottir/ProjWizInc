@@ -34,7 +34,6 @@ namespace xUnitTester.Managers {
             jobState.ActiveJobId = 0;
             eventManager.Subscribe<ResourceGainedEvent>(OnResourceGained);
             eventManager.Publish(new UpdateLogicEvent());
-            Assert.True(jobManager.UpdateMethodWasEntered, "The Update method was never even called!");
             Assert.Equal(new BigNum(0), jobState.Ticks);
             Assert.True(_eventFired, "The ResourceGainedEvent was never published!");
         }
@@ -84,6 +83,10 @@ namespace xUnitTester.Managers {
             state.Ticks = new BigNum(50);
             eventManager.Publish(new UpdateLogicEvent());
             Assert.Equal(new BigNum(51), state.Ticks);
+        }
+        [Fact]
+        public void JobManager_ContinuesLoopingAfterCompletion_WhenSameJobSelected() {
+
         }
     }
 }

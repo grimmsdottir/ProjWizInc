@@ -19,6 +19,7 @@ namespace ProjWizInc.Core.Persistence {
                 PropertyNameCaseInsensitive = true,
                 //TODO hook up bignum converter
             };
+            _options.Converters.Add(new BigNumJsonConverter());
         }
         //generic load for definitions, whatever that means
         public T? Load<T>(string filePath) {
@@ -39,7 +40,6 @@ namespace ProjWizInc.Core.Persistence {
             string json = File.ReadAllText(filePath);
             return JsonSerializer.Deserialize<GameState>(json, _options);
         }
-
         */
     }
 }

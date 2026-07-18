@@ -19,7 +19,6 @@ namespace ProjWizInc.Core.Managers {
         private readonly JobState _state;
         private readonly DefinitionManager _defs;
         //we use -1 like null basically, if its -1 that means that nothings active
-        public bool UpdateMethodWasEntered { get; private set; } = false;
         public JobManager(EventManager events, JobState state, DefinitionManager definitionManager) {
             _events = events;
             _defs = definitionManager;
@@ -28,7 +27,8 @@ namespace ProjWizInc.Core.Managers {
                 CacheState(_state.ActiveJobId);
             }
             _events.Subscribe<UpdateLogicEvent>(Update);
-        } 
+        }
+        public JobState State => _state;
         public void ToggleJob(int jobId) {
             //basically if we click the current job, it just stops it, but if we click something else, we 
             //move to that one instead
@@ -52,7 +52,6 @@ namespace ProjWizInc.Core.Managers {
             }
         }
         public void Update(UpdateLogicEvent e) {
-            UpdateMethodWasEntered = true;
             if (_state.ActiveJobId == -1) { return; }
             if (_state.JobTicksRequired != null) {
                 _state.Ticks++;

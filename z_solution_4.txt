@@ -1,359 +1,608 @@
 ﻿==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\Bootstrapper.cs
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\JobManager.cs
 ==============================================================================
 using ProjWizInc.Core.ADT;
 using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Definitions.Blueprints;
-using ProjWizInc.Core.Definitions.Common;
+using ProjWizInc.Core.Definitions.Entries;
 using ProjWizInc.Core.Definitions.Components;
-using ProjWizInc.Core.Persistence;
-using ProjWizInc.Core.States;
-using ProjWizInc.Core.States.Managers;
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Managers {
-    /*
-     * this class exists to create the ContextManager and all the other managers, so that we dont have
-     * to clutter the context manager for all the init and whatnot, and just have it manage runtime stuff
-     */
-    public class Bootstrapper {
-        public const string DEFS_DIRECTORY = "defs";
-        //we split out BuildContext into 2, one for "proper" booting from file etc, and another which
-        //can boot using specially provided defs and save for testing purposes
-        public static CoreContext BuildContext() {
-            SerialisationService serialiser = new SerialisationService();
-            GameState gameState = new GameState();
-            GameDefinitions masterDefinitions = new GameDefinitions();
-
-            if (Directory.Exists(DEFS_DIRECTORY)) {
-                string[] jsonFiles = Directory.GetFiles(DEFS_DIRECTORY, "*.json", SearchOption.AllDirectories);
-
-                // Cache GameDefinitions properties once before entering the loop
-                System.Reflection.PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
-
-                for (int i = 0; i < jsonFiles.Length; i++) {
-                    string filePath = jsonFiles[i];
-                    GameDefinitions partialDefinitions = serialiser.Load<GameDefinitions>(filePath);
-
-                    if (partialDefinitions != null) {
-                        // Dynamically merge lists for any List<T> properties found
-                        for (int p = 0; p < properties.Length; p++) {
-                            System.Reflection.PropertyInfo prop = properties[p];
-
-                            // Verify if the property represents a generic list
-                            if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
-                                System.Collections.IList partialList = (System.Collections.IList)prop.GetValue(partialDefinitions);
-                                System.Collections.IList masterList = (System.Collections.IList)prop.GetValue(masterDefinitions);
-
-                                if (partialList != null && masterList != null) {
-                                    for (int itemIndex = 0; itemIndex < partialList.Count; itemIndex++) {
-                                        masterList.Add(partialList[itemIndex]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                Directory.CreateDirectory(DEFS_DIRECTORY);
-            }
-
-            // 1. Build DefinitionManager first to serve as the ID and count authority
-            DefinitionManager definitionManager = BuildDefinitionManager(masterDefinitions);
-
-            // 2. HYDRATE AND ALLOCATE SAVE STATE ARRAYS BEFORE CONTEXT AND MANAGER CONSTRUCTION
-            if (gameState.economyState.Resources == null) {
-                int resourceCount = definitionManager.GetDefCount<ResourceDefinition>();
-                gameState.economyState.Resources = new BigNum[resourceCount];
-
-                for (int i = 0; i < resourceCount; i++) {
-                    gameState.economyState.Resources[i] = new BigNum(0);
-                }
-            }
-
-            // 3. Pass the fully initialized, non-null gameState to compile the service manager graph
-            CoreContext context = BuildContext(masterDefinitions, gameState);
-
-            return context;
-        }
-
-        public static CoreContext BuildContext(GameDefinitions rawData, GameState gameState) {
-            //now we slice up the GameState into slices to pass to the managers
-            EconomyState economyState = gameState.economyState;
-            JobState jobState = gameState.jobState;
-            TimeState timeState = gameState.timeState;
-            //special managers that need to be initialised first
-            EventManager eventManager = new EventManager();
-            //the definition manager is so special it gets its own section lol
-            DefinitionManager definitionManager = BuildDefinitionManager(rawData);
-            ResolveDictionaryLinks(definitionManager);
-            //construct basic managers
-            EconomyManager economyManager = new EconomyManager(eventManager, economyState);
-            GameLoopManager gameLoopManager = new GameLoopManager(eventManager);
-            JobManager jobManager = new JobManager(eventManager, jobState, definitionManager);
-            TimeManager timeManager = new TimeManager(eventManager, timeState);
-            return new CoreContext(
-                definitionManager,
-                eventManager,
-                economyManager,
-                gameLoopManager,
-                jobManager,
-                timeManager
-                );
-        }
-        private static void ResolveDictionaryLinks(DefinitionManager definitionManager) {
-            IEnumerable<Array> allTypeIdDefMaps = definitionManager.GetAllDefinitions();
-            //so this enumarates over each Type in the typeIdDefMap
-            foreach (Array idDefMaps in allTypeIdDefMaps) { 
-                //we use object here because it could be resource or job or whatever, and T would be overkill
-                foreach (object item in idDefMaps) {
-                    if (item is DefinitionEntity entity) {
-                        foreach (IDefinitionComponentInterface component in entity.Components) {
-                            if (component is ILinkableDefinitionInterface linkable) {
-                                linkable.ResolveLinks(definitionManager);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        //the definition manager is so chonky we split it out to here
-        private static DefinitionManager BuildDefinitionManager(GameDefinitions rawData) {
-            //first we read the json and get the GameDefinitions
-            
-            //then we create the dicts
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
-            Dictionary<Type, Array> typeIdDefMap = [];
-            //then we fill the dictionaries
-            PopulateAllDictionaries(rawData, typeKeyIdMap, typeIdDefMap);
-            //we arent done yet, because we havent resolved links, but its good enough
-            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
-        }
-        //wizardly reflection something magic, idk
-        private static void PopulateAllDictionaries(
-            GameDefinitions data,
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
-            Dictionary<Type, Array> typeIdDefMap
-            ) {
-            // We look at every property in GameDefinitions (Resources, Jobs, etc.)
-            var properties = typeof(GameDefinitions).GetProperties();
-
-            foreach (var prop in properties) {
-                // Check if the property is a List<T> where T inherits from DefinitionBase
-                if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
-                    var listValue = prop.GetValue(data);
-                    if (listValue == null) continue;
-
-                    // Get the specific type (e.g., ResourceDefinition)
-                    var itemType = prop.PropertyType.GetGenericArguments()[0];
-
-                    // Use 'MakeGenericMethod' to call your PopulateRegistry<T> method dynamically
-                    var method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-                    var genericMethod = method.MakeGenericMethod(itemType);
-
-                    genericMethod.Invoke(null, new object[] { listValue, typeKeyIdMap, typeIdDefMap });
-                }
-            }
-        }
-        /* this hecking thing is the definition buildertron, which is so complex, imma write this down here so i remember
-         * T - the type of definition, which will need to be hard coded, for each type of definition,
-         * like JobDefinition and Resource definition
-         * items - this will be the contents of GameDefinitions.SomeDefinition that we got from the json
-         * typeKeyIdMap - the name should be self evident, but its still a mindbender. so the key of the outer layer
-         * dict is the dynamic subtype of the definition, so gold, wood etc in ResourceDefinitions, the the value is
-         * another hecking dict, which maps strings to in, so the "gold" in .json gets translated to a number
-         * typeIdDef - like above the outer layer is the same, but the inner layer is an array of actual definitions
-         * so like the gold definition with all its components and name etc
-         * we go through this song and dance so that when somebody wants a definition, they just give a number and 
-         * we can give it them just like that
-         * for the front end and for linking, they dont know the number of the thing, they only have the string of the 
-         * thing, so thats what the first dictionary is for, which they use to peruse the second dictionary
-         * also because of glorious pass by reference, we only need to init the outer dictionaries once and pass it
-         */
-        private static void PopulateDictionaries<T>(
-            List<T> items,
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
-            Dictionary<Type, Array> typeIdDefMap
-            ) where T : DefinitionBase {
-            var idDefMap = new T[items.Count];
-            var keyIdMap = new Dictionary<string, int>();
-            //so first we prepare the inner dict/array
-            for (int i = 0; i < items.Count; i++) {
-                items[i].Id = i;
-                keyIdMap[items[i].Key] = i;
-                idDefMap[i] = items[i];
-            }
-            //then we stock the outer dict
-            typeKeyIdMap[typeof(T)] = keyIdMap;
-            typeIdDefMap[typeof(T)] = idDefMap;
-        }
-        
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\CoreContext.cs
-==============================================================================
-using ProjWizInc.Core.ADT;
-using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Definitions.Blueprints;
-using ProjWizInc.Core.Definitions.Common;
-using ProjWizInc.Core.States.Managers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Managers {
-    public class CoreContext {
-        //our special managers
-        private readonly EventManager _event;
-        private readonly DefinitionManager _defs;
-        //our normal managers
-        private readonly EconomyManager _economy;
-        private readonly GameLoopManager _gameLoop;
-        private readonly JobManager _jobs;
-        private readonly TimeManager _time;
-        //we arrange our managers alphabetically, and specials first
-        internal EventManager EventManager => _event;
-        internal DefinitionManager DefinitionManager => _defs;
-        internal EconomyManager EconomyManager => _economy;
-        internal GameLoopManager GameLoopManager => _gameLoop;
-        internal JobManager JobManager => _jobs;
-        internal TimeManager TimeManager => _time;
-
-        public CoreContext(
-            DefinitionManager definitionManager,
-            EventManager eventManager,
-            EconomyManager economyManager,
-            GameLoopManager gameLoopManager,
-            JobManager jobManager,
-            TimeManager timeManger
-            ) {
-
-            _defs = definitionManager; 
-            _event = eventManager;
-            _economy = economyManager;
-            _gameLoop = gameLoopManager;
-            _jobs = jobManager;
-            _time = timeManger;
-        }
-        public void Start() {
-            _gameLoop.Start();
-        }
-        public void Subscribe<T>(Action<T> handler) {
-            _event.Subscribe(handler);
-        }
-        public void Unsubscribe<T>(Action<T> handler) {
-            _event.Unsubscribe(handler);
-        }
-        public void Publish<T>(T eventArgs) {
-            _event.Publish(eventArgs);
-        }
-        internal T GetDefinition<T>(int id) where T : DefinitionBase {
-            return _defs.GetDefinition<T>(id);
-        }
-        internal int GetDefinitionCount<T>() where T : DefinitionBase {
-            // Simply forward the request to the actual manager
-            return _defs.GetDefCount<T>();
-        }
-        public int GetResourceCount() {
-            return _defs.GetDefCount<ResourceDefinition>();
-        }
-        public int GetJobCount() {
-            return _defs.GetDefCount<JobDefinition>();
-        }
-
-        public ResourceDefinition GetResourceDefinition(int id) {
-            return _defs.GetDefinition<ResourceDefinition>(id);
-        }
-
-        public JobDefinition GetJobDefinition(int id) {
-            return _defs.GetDefinition<JobDefinition>(id);
-        }
-
-        public BigNum GetResourceAmount(int id) {
-            return _economy.GetResource(id);
-        }
-
-        public void ToggleJob(int id) {
-            _jobs.ToggleJob(id);
-        }
-
-        public JobState GetJobState() {
-            return _jobs.State;
-        }
-        public TimeState GetTimeState() {
-            return _time.State;
-        }
-    }
-}
-
-
-==============================================================================
-FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\EconomyManager.cs
-==============================================================================
-using ProjWizInc.Core.ADT;
-using ProjWizInc.Core.Data;
-using ProjWizInc.Core.Definitions;
 using ProjWizInc.Core.Events;
 using ProjWizInc.Core.States.Managers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Resources;
+using System.Text;
+using System.Threading.Tasks;
+using static System.Reflection.Metadata.BlobBuilder;
+
+namespace ProjWizInc.Core.Managers {
+    
+    public class JobManager {
+        private readonly EventManager _events;
+        private readonly JobState _state;
+        private readonly DefinitionManager _defs;
+        //we use -1 like null basically, if its -1 that means that nothings active
+        public JobManager(EventManager events, JobState state, DefinitionManager definitionManager) {
+            _events = events;
+            _defs = definitionManager;
+            _state = state;
+            if (_state.ActiveJobId != -1) {
+                CacheState(_state.ActiveJobId);
+            }
+            _events.Subscribe<UpdateLogicEvent>(Update);
+        }
+        public JobState State => _state;
+        public void ToggleJob(int jobId) {
+            //basically if we click the current job, it just stops it, but if we click something else, we 
+            //move to that one instead
+            if (_state.ActiveJobId == jobId) {
+                _state.Reset();
+            } else {
+                CacheState(jobId);
+            }            
+        }
+        private void CacheState(int jobId) {
+            _state.Reset();
+            if (jobId < 0) {
+                //todo: log and complain about illegal arguement
+                return;
+            } else {
+                _state.ActiveJobId = jobId;
+                _state.ActiveJobDef = _defs.GetDefinition<JobDefinition>(jobId);
+                _state.JobTicksRequired = _state.ActiveJobDef.GetComponent<RequiresTicksComponent>();
+                _state.Ticks = 0;
+                _state.JobPayout = _state.ActiveJobDef.GetComponent<PayoutComponent>();
+            }
+        }
+        public void Update(UpdateLogicEvent e) {
+            if (_state.ActiveJobId == -1) { return; }
+            if (_state.JobTicksRequired != null) {
+                _state.Ticks++;
+                if (_state.Ticks >= _state.JobTicksRequired.RequiredTicks) {
+                    _state.Ticks -= _state.JobTicksRequired.RequiredTicks;
+                    CompleteJob();
+                }
+            }
+        }
+        public void CompleteJob() {
+            if (_state.JobPayout != null) {
+                foreach (ResourcePayoutEntry entry in _state.JobPayout.PayoutEntries) {
+                    int id = entry.ResourceID;
+                    BigNum amount = entry.Amount;
+                    _events.Publish(new ResourceGainedEvent(id,amount));
+                }
+            }
+            _events.Publish(new JobCompleted(_state.ActiveJobId));
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Managers\TimeManager.cs
+==============================================================================
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.States.Managers;
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Managers {
-
     
-    public class EconomyManager{
+    public class TimeManager {
         private readonly EventManager _events;
-        private readonly EconomyState _state;
-        private readonly object _lock = new ();
-        public EconomyManager(EventManager events, EconomyState state) {
-            _state = state; ;
+        private readonly TimeState _state;
+        public TimeState State => _state;
+
+        public TimeManager(EventManager events, TimeState timeState) {
             _events = events;
+            _state = timeState;
             _events.Subscribe<UpdateLogicEvent>(Update);
-            _events.Subscribe<ResourceGainedEvent>(AddResource);
         }
-        public EconomyState State => _state;
+        public long GetTime() {
+            return _state.TimeElapsed;
+        }
         //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
         //but if we change UpdateFrameEvent with parameters later, we can check it with e
         public void Update(UpdateLogicEvent e) {
-            
+            AdvanceTick();
         }
-        private void AddResource(ResourceGainedEvent e) {
-            lock (_lock) {
-                if (e.Id >= _state.Resources.Length) {
-                    throw new IndexOutOfRangeException("Attempted to access resource at index "+ e.Id+". There are" +
-                        "only "+_state.Resources.Length + " resource types");
-                }
-                _state.Resources[e.Id] += e.Amount;
-            }            
-        }
-        public BigNum GetResource(int resourceID) {
-            lock (_lock) {
-                if (resourceID >= _state.Resources.Length) {
-                    throw new IndexOutOfRangeException("Attempted to access resource at index " + resourceID + ". There are" +
-                        "only " + _state.Resources.Length + " resource types");
-                }
-                return _state.Resources[resourceID];
+        private void AdvanceTick() {
+            _state.TicksElapsed++;
+            if (_state.TicksElapsed >= Globals.LOGIC_TPS) {
+                _state.TicksElapsed -= Globals.LOGIC_TPS;
+                _state.TimeElapsed++;
             }
-           
-
         }
-
     }
 }
 
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\BigNumJsonConverter.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Persistence {
+    public class BigNumJsonConverter : JsonConverter<BigNum> {
+        public override BigNum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+            // Try reading as string (scientific/large) or number (small)
+            if (reader.TokenType == JsonTokenType.String)
+                return BigNum.Parse(reader.GetString()!);
+
+            if (reader.TokenType == JsonTokenType.Number)
+                return new BigNum(reader.GetDouble());
+            //not sure if we should throw an exception here or something 
+            return new BigNum(0);
+        }
+        public override void Write(Utf8JsonWriter writer, BigNum value, JsonSerializerOptions options) {
+            // Always write as string to maintain precision
+            writer.WriteStringValue(value.ToScientific(false));
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\Persistence\SerialisationService.cs
+==============================================================================
+using ProjWizInc.Core.States;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Persistence {
+    /*
+     * this class serves a sort of helper or translator.
+     * because we use polymorphism, a custom ADT and other future funky stuff, we want to clarify the rules here
+     */
+    public class SerialisationService {
+        private readonly JsonSerializerOptions _options;
+        public SerialisationService() {
+            _options = new JsonSerializerOptions {
+                WriteIndented = true,
+                PropertyNameCaseInsensitive = true,
+                //TODO hook up bignum converter
+            };
+            _options.Converters.Add(new BigNumJsonConverter());
+        }
+        //generic load for definitions, whatever that means
+        public T? Load<T>(string filePath) {
+            if (!File.Exists(filePath)) return default;
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<T>(json, _options);
+        }
+        /*
+        // Save the entire GameState (Memory)
+        public void SaveState(string filePath, GameState state) {
+            string json = JsonSerializer.Serialize(state, _options);
+            File.WriteAllText(filePath, json);
+        }
+
+        // Load the entire GameState (Memory)
+        public GameState? LoadState(string filePath) {
+            if (!File.Exists(filePath)) return null;
+            string json = File.ReadAllText(filePath);
+            return JsonSerializer.Deserialize<GameState>(json, _options);
+        }
+        */
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\GameState.cs
+==============================================================================
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States {
+    /* 
+     * Despite how important GameState will be, it is ultimately just a box of boxes
+     */
+    public class GameState {
+        public EconomyState economyState { get; set; } = new();
+        public JobState jobState { get; set; } = new();
+        public TimeState timeState { get; set; } = new();
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\EconomyState.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class EconomyState {
+        //changed the dictionary to using ints instead of strings for faster searching
+        public BigNum[]? Resources { get; set; }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\JobState.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Data;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Components;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class JobState {
+        public int ActiveJobId { get; set; } = -1;
+        //we keep a cache of the active job's def, so we only need to search it up whenver we change jobs
+        public JobDefinition? ActiveJobDef { get; set; } = null;
+        //we also keep a cache of any components and their state vars like ticks and xp
+        public RequiresTicksComponent? JobTicksRequired { get; set; } = null;
+        public BigNum Ticks { get; set; } = 0;
+        public PayoutComponent? JobPayout { get; set; } = null;
+        //a handy reset function for nulling everything
+        public void Reset() {
+            ActiveJobId = -1;
+            ActiveJobDef = null;
+            JobTicksRequired = null;
+            Ticks = 0;
+            JobPayout = null;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.Core\States\Managers\TimeState.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.States.Managers {
+    public class TimeState {
+        //TODO:use minutes/hours/days to store time, maybe its own ADT
+        public long TimeElapsed;
+        public int TicksElapsed;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.cs
+==============================================================================
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States;
+using System.Diagnostics;
+
+namespace ProjWizInc.WinForms
+{
+    public partial class Form1 : Form {
+        private readonly ContextManager _context;
+
+        public Form1() {
+            InitializeComponent();
+            _context = ContextManager.Instance;
+            _context.Subscribe<UpdateRenderEvent>(UpdateUI);
+            _context.Start();
+        }
+        protected override void OnLoad(EventArgs e) {
+            base.OnLoad(e);
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) {
+            base.OnFormClosed(e);
+            _context.Unsubscribe<UpdateRenderEvent>(UpdateUI);
+        }
+        private void UpdateUI(UpdateRenderEvent e) {
+            // Check if we need to marshal to the UI thread
+            if (labelTimer.InvokeRequired) {
+                labelTimer.BeginInvoke(() => UpdateUI(e));
+                return;
+            }
+            long time = 0;
+            labelTimer.Text = "Time: " + time;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Form1.Designer.cs
+==============================================================================
+namespace ProjWizInc.WinForms
+{
+    partial class Form1
+    {
+        /// <summary>
+        ///  Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        ///  Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        ///  Required method for Designer support - do not modify
+        ///  the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent() {
+            labelTimer = new Label();
+            button1 = new Button();
+            button2 = new Button();
+            progressBar1 = new ProgressBar();
+            progressBar2 = new ProgressBar();
+            labelGold = new Label();
+            SuspendLayout();
+            // 
+            // labelTimer
+            // 
+            labelTimer.AutoSize = true;
+            labelTimer.Location = new Point(67, 40);
+            labelTimer.Name = "labelTimer";
+            labelTimer.Size = new Size(57, 20);
+            labelTimer.TabIndex = 0;
+            labelTimer.Text = "Time: 0";
+            // 
+            // button1
+            // 
+            button1.Location = new Point(82, 160);
+            button1.Name = "button1";
+            button1.Size = new Size(94, 29);
+            button1.TabIndex = 1;
+            button1.Text = "button1";
+            button1.UseVisualStyleBackColor = true;
+            // 
+            // button2
+            // 
+            button2.Location = new Point(82, 195);
+            button2.Name = "button2";
+            button2.Size = new Size(94, 29);
+            button2.TabIndex = 2;
+            button2.Text = "button2";
+            button2.UseVisualStyleBackColor = true;
+            // 
+            // progressBar1
+            // 
+            progressBar1.Location = new Point(182, 160);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(125, 29);
+            progressBar1.TabIndex = 3;
+            // 
+            // progressBar2
+            // 
+            progressBar2.Location = new Point(182, 195);
+            progressBar2.Name = "progressBar2";
+            progressBar2.Size = new Size(125, 29);
+            progressBar2.TabIndex = 4;
+            // 
+            // labelGold
+            // 
+            labelGold.AutoSize = true;
+            labelGold.Location = new Point(67, 60);
+            labelGold.Name = "labelGold";
+            labelGold.Size = new Size(44, 20);
+            labelGold.TabIndex = 5;
+            labelGold.Text = "Gold:";
+            // 
+            // Form1
+            // 
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(800, 450);
+            Controls.Add(labelGold);
+            Controls.Add(progressBar2);
+            Controls.Add(progressBar1);
+            Controls.Add(button2);
+            Controls.Add(button1);
+            Controls.Add(labelTimer);
+            Name = "Form1";
+            Text = "Form1";
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        private Label labelTimer;
+        private Button button1;
+        private Button button2;
+        private ProgressBar progressBar1;
+        private ProgressBar progressBar2;
+        private Label labelGold;
+    }
+}
+
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\ProjWizInc.WinForms\Program.cs
+==============================================================================
+namespace ProjWizInc.WinForms
+{
+    internal static class Program
+    {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            // To customize application configuration such as set high DPI settings or default font,
+            // see https://aka.ms/applicationconfiguration.
+            ApplicationConfiguration.Initialize();
+
+            Application.Run(new Form1());
+        }
+    }
+}
+
+==============================================================================
+FILE: C:\Users\grimm\source\repos\ProjWizInc\Testertron\Program.cs
+==============================================================================
+using ProjWizInc.Core.ADT;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Events;
+using ProjWizInc.Core.Managers;
+using ProjWizInc.Core.States.Managers;
+using System;
+using System.Threading;
+
+namespace Testertron {
+    internal class Program {
+        private static CoreContext _context = null!;
+        private static bool _running = true;
+
+        public static void Main(string[] args) {
+            // 1. Boot the core context (This loads the split JSON files from bin/Debug/net8.0/defs/)
+            _context = Bootstrapper.BuildContext();
+
+            // 2. Subscribe to the render frame (the 30 PPS pulse) to redraw the screen
+            _context.Subscribe<UpdateRenderEvent>(OnRenderPulse);
+
+            // 3. Start the asynchronous background tick loops
+            _context.Start();
+
+            // Hide the terminal cursor to prevent blinking visual artifacts
+            Console.CursorVisible = false;
+            Console.Clear();
+
+            // 4. Main Non-Blocking Input Loop
+            while (_running) {
+                // Check if a key was pressed without blocking the thread
+                if (Console.KeyAvailable) {
+                    ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                    ProcessInput(keyInfo);
+                }
+
+                // Yield the CPU slightly (sleep 50ms) to keep CPU core usage near 0%
+                Thread.Sleep(50);
+            }
+
+            // Cleanup on termination
+            _context.Unsubscribe<UpdateRenderEvent>(OnRenderPulse);
+            Console.CursorVisible = true;
+            Console.Clear();
+            Console.WriteLine("Headless engine terminated cleanly.");
+        }
+
+        private static void OnRenderPulse(UpdateRenderEvent e) {
+            // Resets the draw cursor to the top-left corner instead of clearing the screen.
+            // This achieves standard, flicker-free rendering inside the console.
+            Console.SetCursorPosition(0, 0);
+
+            long time = _context.GetTimeState().TimeElapsed;
+            Console.WriteLine("==================================================");
+            Console.WriteLine("         PROJECT WIZARD INCREMENTAL - TERMINAL    ");
+            Console.WriteLine("==================================================");
+            Console.WriteLine(" Time Elapsed: " + time.ToString() + "s");
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Resources
+            Console.WriteLine(" INVENTORY:");
+            int resourceCount = _context.GetResourceCount();
+            for (int i = 0; i < resourceCount; i++) {
+                ResourceDefinition def = _context.GetResourceDefinition(i);
+                BigNum amount = _context.GetResourceAmount(i);
+                Console.WriteLine("  - " + def.DisplayName + ": " + amount.ToString());
+            }
+            Console.WriteLine("--------------------------------------------------");
+
+            // Render Jobs
+            Console.WriteLine(" AVAILABLE TASKS:");
+            int jobCount = _context.GetJobCount();
+            JobState jobState = _context.GetJobState();
+            int activeJobId = jobState.ActiveJobId;
+
+            for (int i = 0; i < jobCount; i++) {
+                JobDefinition def = _context.GetJobDefinition(i);
+                string status = "Idle  ";
+                string progress = "0%  ";
+
+                if (i == activeJobId) {
+                    status = "ACTIVE";
+                    if (jobState.JobTicksRequired != null) {
+                        double current = 0.0;
+                        double required = 1.0;
+
+                        // Parse BigNum limits into doubles for display percentage
+                        if (!jobState.Ticks.IsLarge) {
+                            current = jobState.Ticks.Small;
+                        } else {
+                            current = jobState.Ticks.Man * Math.Pow(10, jobState.Ticks.Exp);
+                        }
+
+                        if (!jobState.JobTicksRequired.RequiredTicks.IsLarge) {
+                            required = jobState.JobTicksRequired.RequiredTicks.Small;
+                        } else {
+                            required = jobState.JobTicksRequired.RequiredTicks.Man * Math.Pow(10, jobState.JobTicksRequired.RequiredTicks.Exp);
+                        }
+
+                        double ratio = current / required;
+                        progress = ((int)(ratio * 100)).ToString() + "%   ";
+                    }
+                }
+
+                Console.WriteLine("  [" + (i + 1).ToString() + "] " + def.DisplayName.PadRight(15) + " (" + status + ") - Progress: " + progress);
+            }
+            Console.WriteLine("--------------------------------------------------");
+            Console.WriteLine(" Controls: Press [1], [2], [3] to Toggle Jobs.    ");
+            Console.WriteLine("           Press [Q] to Quit.                     ");
+            Console.WriteLine("==================================================");
+        }
+
+        private static void ProcessInput(ConsoleKeyInfo keyInfo) {
+            char keyChar = keyInfo.KeyChar;
+
+            if (keyChar == 'q' || keyChar == 'Q') {
+                _running = false;
+            } else if (keyChar == '1') {
+                _context.ToggleJob(0);
+            } else if (keyChar == '2') {
+                _context.ToggleJob(1);
+            } else if (keyChar == '3') {
+                _context.ToggleJob(2);
+            }
+        }
+    }
+}
 

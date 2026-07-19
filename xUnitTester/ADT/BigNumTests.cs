@@ -1,6 +1,6 @@
 using ProjWizInc.Core.ADT;
 
-namespace xUnitTester {
+namespace xUnitTester.ADT {
     public class BigNumTests {
         //reminder that our boundry is around 2e15
         private const int NUM_0 = 0;
@@ -29,9 +29,9 @@ namespace xUnitTester {
         [InlineData(0.01, 5, 1.0, 3)]         // Under 1: 0.01e5 -> 1.0e3
         [InlineData(950, 10, 9.5, 12)]        // Standard normalization
         [InlineData(0.0001, -2, 1.0, -6)]     // Negative exponents
-        public void Constructor_AlwaysNormalizesCorrectly(double mIn, int eIn, double mExp, long eExp) {
+        public void Constructor_AlwaysNormalizesCorrectly(double mIn, int eIn, double mExp, int eExp) {
             // Act
-            var val = new BigNum(mIn, eIn);
+            BigNum val = new BigNum(mIn, eIn);
 
             // Assert
             // We check the internal components. 
@@ -46,7 +46,7 @@ namespace xUnitTester {
         [InlineData(0.01, 0, 0.01, false)]     // Decimal -> NOW Small Path (Previously Large)
         [InlineData(1.23, -2, 0.0123, false)]  // Negative Exp -> NOW Small Path
         public void Constructor_Normalization_PathCheck(double mIn, int eIn, double expectedSmall, bool expectedIsLarge) {
-            var val = new BigNum(mIn, eIn);
+            BigNum val = new BigNum(mIn, eIn);
 
             Assert.Equal(expectedIsLarge, val.IsLarge);
 
@@ -58,7 +58,7 @@ namespace xUnitTester {
         [Fact]
         public void Constructor_ExtremeUnnormalized_NormalizesCorrectly() {
             // 1,000,000e0 should become 1e6
-            var val = new BigNum(1_000_000, 0);
+            BigNum val = new BigNum(1_000_000, 0);
 
             Assert.Equal(1.0, val.Man, 10);
             Assert.Equal(6, val.Exp);
@@ -67,7 +67,7 @@ namespace xUnitTester {
         [Fact]
         public void Constructor_TinyDecimal_NormalizesCorrectly() {
             // 0.000001e0 should become 1e-6
-            var val = new BigNum(0.000001, 0);
+            BigNum val = new BigNum(0.000001, 0);
 
             Assert.Equal(1.0, val.Man, 10);
             Assert.Equal(-6, val.Exp);
@@ -127,9 +127,9 @@ namespace xUnitTester {
         [InlineData("1.0e10", 10000000000)]
         [InlineData("  500  ", 500)] // Testing the Trim()
         public void Parse_ValidatesAllFormats(string input, double expectedValue) {
-            var result = BigNum.Parse(input);
+            BigNum result = BigNum.Parse(input);
             // You'll need an explicit/implicit cast to double for this assertion
-            //Assert.Equal(expectedValue, (double)result);
+            Assert.Equal(expectedValue, (double)result);
         }
         [Theory]
         [InlineData("100", "100", true)]   // Exactly equal (Small)

@@ -7,12 +7,9 @@ using ProjWizInc.Core.Persistence;
 using ProjWizInc.Core.States;
 using ProjWizInc.Core.States.Managers;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ProjWizInc.Core.Managers {
     /*
@@ -27,21 +24,23 @@ namespace ProjWizInc.Core.Managers {
             SerialisationService serialiser = new SerialisationService();
             GameState gameState = new GameState();
             GameDefinitions masterDefinitions = new GameDefinitions();
-
+            //first we scan and look for the defs directory
             if (Directory.Exists(DEFS_DIRECTORY)) {
+                //we grab all the .json files in the defs directory
                 string[] jsonFiles = Directory.GetFiles(DEFS_DIRECTORY, "*.json", SearchOption.AllDirectories);
-
                 // Cache GameDefinitions properties once before entering the loop
-                System.Reflection.PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
-
+                PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
+                //we process each json
                 for (int i = 0; i < jsonFiles.Length; i++) {
                     string filePath = jsonFiles[i];
+                    //we load each json as a partial definition, which is an incomplete GameDefinition
                     GameDefinitions partialDefinitions = serialiser.Load<GameDefinitions>(filePath);
-
+                    //reflection shinegigans to create the master definition from partial ones
+                    //basically the compiler doesnt know how each GameDefinition.whatever is structured like
                     if (partialDefinitions != null) {
                         // Dynamically merge lists for any List<T> properties found
                         for (int p = 0; p < properties.Length; p++) {
-                            System.Reflection.PropertyInfo prop = properties[p];
+                            PropertyInfo prop = properties[p];
 
                             // Verify if the property represents a generic list
                             if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
@@ -65,13 +64,23 @@ namespace ProjWizInc.Core.Managers {
             DefinitionManager definitionManager = BuildDefinitionManager(masterDefinitions);
 
             // 2. HYDRATE AND ALLOCATE SAVE STATE ARRAYS BEFORE CONTEXT AND MANAGER CONSTRUCTION
+            // Refactored to cleanly support the state DualKeyMap transition
             if (gameState.economyState.Resources == null) {
-                int resourceCount = definitionManager.GetDefCount<ResourceDefinition>();
-                gameState.economyState.Resources = new BigNum[resourceCount];
+                // If you have completed the transition of EconomyState.Resources to DualKeyMap<BigNum>:
+                DualKeyMap<ResourceDefinition> resourceDefMap = definitionManager.GetMap<ResourceDefinition>();
+                gameState.economyState.Resources = new DualKeyMap<BigNum>(resourceDefMap.KeyIdMap);
+                gameState.economyState.Resources.Reset(); // Struct values automatically initialize to BigNum(0)
 
-                for (int i = 0; i < resourceCount; i++) {
-                    gameState.economyState.Resources[i] = new BigNum(0);
-                }
+                /* 
+                 * NOTE: If you have NOT yet finished refactoring EconomyState.Resources to DualKeyMap<BigNum> 
+                 * and are still using a raw BigNum[] array, you can revert back to this legacy block:
+                 *
+                 * int resourceCount = definitionManager.GetDefCount<ResourceDefinition>();
+                 * gameState.economyState.Resources = new BigNum[resourceCount];
+                 * for (int i = 0; i < resourceCount; i++) {
+                 *     gameState.economyState.Resources[i] = new BigNum(0);
+                 * }
+                 */
             }
 
             // 3. Pass the fully initialized, non-null gameState to compile the service manager graph
@@ -105,14 +114,21 @@ namespace ProjWizInc.Core.Managers {
                 );
         }
         private static void ResolveDictionaryLinks(DefinitionManager definitionManager) {
-            IEnumerable<Array> allTypeIdDefMaps = definitionManager.GetAllDefinitions();
-            //so this enumarates over each Type in the typeIdDefMap
-            foreach (Array idDefMaps in allTypeIdDefMaps) { 
-                //we use object here because it could be resource or job or whatever, and T would be overkill
+            // Zero-allocation retrieval of the registry maps
+            Dictionary<Type, IDualKeyMap>.ValueCollection allMaps = definitionManager.GetAllMaps();
+
+            foreach (IDualKeyMap map in allMaps) {
+                // Retrieve the contiguous array for polymorphic scanning
+                Array idDefMaps = map.RawArray;
+
                 foreach (object item in idDefMaps) {
-                    if (item is DefinitionEntity entity) {
-                        foreach (IDefinitionComponentInterface component in entity.Components) {
-                            if (component is ILinkableDefinitionInterface linkable) {
+                    DefinitionEntity entity = item as DefinitionEntity;
+                    if (entity != null) {
+                        List<IDefinitionComponentInterface> components = entity.Components;
+                        for (int i = 0; i < components.Count; i++) {
+                            IDefinitionComponentInterface component = components[i];
+                            ILinkableDefinitionInterface linkable = component as ILinkableDefinitionInterface;
+                            if (linkable != null) {
                                 linkable.ResolveLinks(definitionManager);
                             }
                         }
@@ -120,76 +136,67 @@ namespace ProjWizInc.Core.Managers {
                 }
             }
         }
-        //the definition manager is so chonky we split it out to here
+
+
+        // Consolidated and inlined reflection mapping pipeline
         private static DefinitionManager BuildDefinitionManager(GameDefinitions rawData) {
-            //first we read the json and get the GameDefinitions
-            
-            //then we create the dicts
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
-            Dictionary<Type, Array> typeIdDefMap = [];
-            //then we fill the dictionaries
-            PopulateAllDictionaries(rawData, typeKeyIdMap, typeIdDefMap);
-            //we arent done yet, because we havent resolved links, but its good enough
-            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
-        }
-        //wizardly reflection something magic, idk
-        private static void PopulateAllDictionaries(
-            GameDefinitions data,
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
-            Dictionary<Type, Array> typeIdDefMap
-            ) {
-            // We look at every property in GameDefinitions (Resources, Jobs, etc.)
-            var properties = typeof(GameDefinitions).GetProperties();
+            Dictionary<Type, IDualKeyMap> typeMaps = new Dictionary<Type, IDualKeyMap>();
+            PropertyInfo[] properties = typeof(GameDefinitions).GetProperties();
 
-            foreach (var prop in properties) {
-                // Check if the property is a List<T> where T inherits from DefinitionBase
+            for (int i = 0; i < properties.Length; i++) {
+                PropertyInfo prop = properties[i];
+
+                // Verify if the property represents a generic list mapping to a blueprint definition
                 if (prop.PropertyType.IsGenericType && prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) {
-                    var listValue = prop.GetValue(data);
-                    if (listValue == null) continue;
+                    object listValue = prop.GetValue(rawData);
 
-                    // Get the specific type (e.g., ResourceDefinition)
-                    var itemType = prop.PropertyType.GetGenericArguments()[0];
+                    if (listValue == null) {
+                        continue;
+                    }
 
-                    // Use 'MakeGenericMethod' to call your PopulateRegistry<T> method dynamically
-                    var method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-                    var genericMethod = method.MakeGenericMethod(itemType);
+                    // Extract the specific generic argument (e.g., ResourceDefinition)
+                    System.Type itemType = prop.PropertyType.GetGenericArguments()[0];
 
-                    genericMethod.Invoke(null, new object[] { listValue, typeKeyIdMap, typeIdDefMap });
+                    // Dynamically resolve and invoke the open generic PopulateDictionaries helper
+                    MethodInfo method = typeof(Bootstrapper).GetMethod(nameof(PopulateDictionaries), BindingFlags.Static | BindingFlags.NonPublic);
+                    MethodInfo genericMethod = method.MakeGenericMethod(itemType);
+
+                    genericMethod.Invoke(null, new object[] { listValue, typeMaps });
                 }
             }
+
+            return new DefinitionManager(typeMaps);
         }
-        /* this hecking thing is the definition buildertron, which is so complex, imma write this down here so i remember
-         * T - the type of definition, which will need to be hard coded, for each type of definition,
-         * like JobDefinition and Resource definition
-         * items - this will be the contents of GameDefinitions.SomeDefinition that we got from the json
-         * typeKeyIdMap - the name should be self evident, but its still a mindbender. so the key of the outer layer
-         * dict is the dynamic subtype of the definition, so gold, wood etc in ResourceDefinitions, the the value is
-         * another hecking dict, which maps strings to in, so the "gold" in .json gets translated to a number
-         * typeIdDef - like above the outer layer is the same, but the inner layer is an array of actual definitions
-         * so like the gold definition with all its components and name etc
-         * we go through this song and dance so that when somebody wants a definition, they just give a number and 
-         * we can give it them just like that
-         * for the front end and for linking, they dont know the number of the thing, they only have the string of the 
-         * thing, so thats what the first dictionary is for, which they use to peruse the second dictionary
-         * also because of glorious pass by reference, we only need to init the outer dictionaries once and pass it
+        /* 
+         * Constructs and populates strongly-typed DualKeyMaps from loaded configuration files.
+         * The 'where T : DefinitionBase, new()' constraint transitively supports 
+         * the parameterless constructor requirement of DualKeyMap.
+         * It is neccesary because of reflection wizardy
          */
         private static void PopulateDictionaries<T>(
             List<T> items,
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
-            Dictionary<Type, Array> typeIdDefMap
-            ) where T : DefinitionBase {
-            var idDefMap = new T[items.Count];
-            var keyIdMap = new Dictionary<string, int>();
-            //so first we prepare the inner dict/array
+            Dictionary<Type, IDualKeyMap> typeMaps
+        ) where T : DefinitionBase, new() {
+            Dictionary<string, int> keyIdMap = new Dictionary<string, int>();
+
+            // Phase 1: Establish sequential integer IDs and populate the forward mapping registry
             for (int i = 0; i < items.Count; i++) {
                 items[i].Id = i;
                 keyIdMap[items[i].Key] = i;
-                idDefMap[i] = items[i];
             }
-            //then we stock the outer dict
-            typeKeyIdMap[typeof(T)] = keyIdMap;
-            typeIdDefMap[typeof(T)] = idDefMap;
+
+            // Phase 2: Allocate the contiguous, flat runtime map
+            DualKeyMap<T> map = new DualKeyMap<T>(keyIdMap);
+
+            // Phase 3: Insert the definition instances into their mapped array positions
+            for (int i = 0; i < items.Count; i++) {
+                map.SetValue(i, items[i]);
+            }
+
+            // Phase 4: Register the completed map under its concrete Type key
+            typeMaps[typeof(T)] = map;
         }
-        
+
+
     }
 }

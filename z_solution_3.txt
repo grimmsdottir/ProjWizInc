@@ -1,4 +1,201 @@
 ﻿==============================================================================
+FILE: ProjWizInc.Core\Definitions\DefinitionManager.cs
+==============================================================================
+using Microsoft.Win32;
+using ProjWizInc.Core.Definitions.Blueprints;
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using static ProjWizInc.Core.Definitions.GameDefinitions;
+
+namespace ProjWizInc.Core.Definitions {
+
+    
+    public class DefinitionManager {
+        //now we use Type for keys. this first dictionary is a dictionary of dictionaries
+        //each type has its own dictionary, which maps strings to int
+        private readonly Dictionary<Type, Dictionary<string, int>> _typeKeyIdMap = [];
+        //for each Type, it will have its own array, we use a generic Array, because we dont know the typing yet,
+        //but it should basically be like <Type,Type[]>
+        //the int ids from the first dictionary map to the position in the defStore, for high performance
+        private readonly Dictionary<Type, Array> _typeIdDefMap = [];
+        public DefinitionManager(
+            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap,
+            Dictionary<Type, Array> typeIdDefMap
+            ) {
+            _typeKeyIdMap = typeKeyIdMap;
+            _typeIdDefMap = typeIdDefMap;
+        }
+        //this one is like a get all dicts, but as an IEnumarable, which is basically like a copy/immutable
+        //collection. Primary use is for linking right now
+        public IEnumerable<Array> GetAllDefinitions() {
+            return _typeIdDefMap.Values;
+        }
+        public IReadOnlyDictionary<Type, Dictionary<string, int>> GetAllTypeKeyIdMaps() {
+            return _typeKeyIdMap;
+        }
+        public IReadOnlyDictionary<Type, Array> GetAllTypeIdDefMaps() {
+            return _typeIdDefMap;
+        }
+        //primarily used by the managers
+        public T GetDefinition<T>(int id) where T:DefinitionBase {
+            Array rawArray;
+            if (_typeIdDefMap.TryGetValue(typeof(T), out rawArray)) {
+                T[] typedArray = (T[])rawArray;
+                return typedArray[id];
+            }
+            throw new ArgumentException("Attempted to get definition of " + typeof(T).Name + ", which does not exist");
+        }
+        //primarily used by defs for linking
+        public int GetID<T>(string key) where T:DefinitionBase{
+            return _typeKeyIdMap[typeof (T)][key];
+        }
+        public int GetDefCount<T>() where T : DefinitionBase {
+            if (!_typeIdDefMap.ContainsKey(typeof(T))) {
+                throw new InvalidOperationException(
+                    $"[DefinitionManager] Type {typeof(T).Name} has not been registered yet. " +
+                    "Make sure definitions are loaded before calling this.");
+            }
+            return _typeIdDefMap[typeof(T)].Length;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\GameDefinitions.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Blueprints;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions {
+    public class GameDefinitions {
+        //our single source of truth for definitions, if we add any new definitions, it has to come here
+        public List<ResourceDefinition> Resources { get; set; } = [];
+        public List<JobDefinition> Jobs { get; set; } = [];
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Blueprints\JobDefinition.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Blueprints {
+    public class JobDefinition : DefinitionEntity {
+        
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Blueprints\ResourceDefinition.cs
+==============================================================================
+using ProjWizInc.Core.Definitions.Common;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Blueprints {
+    public class ResourceDefinition : DefinitionBase {
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Common\ComponentRegistry.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public static class ComponentRegistry {
+        private static int _counter = 0;
+        public static int NextId() {
+            int id = _counter;
+            _counter = _counter + 1;
+            return id;
+            //could be simplified, but its kinda confusing
+            //return _counter++;
+        }
+        public static int Capacity() {
+            return _counter;
+        }
+    }
+    public static class ComponentType<T> where T : IDefinitionComponentInterface {
+        public static readonly int Id = ComponentRegistry.NextId();
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Common\DefinitionBase.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public class DefinitionBase {
+        public string Key { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public int Id { get; set; } = -1;
+        public DefinitionBase() {
+        }
+        public DefinitionBase(string key, int id) {
+            Key = key;
+            Id = id;
+        }
+    }
+}
+
+
+==============================================================================
+FILE: ProjWizInc.Core\Definitions\Common\DefinitionEntity.cs
+==============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ProjWizInc.Core.Definitions.Common {
+    public class DefinitionEntity : DefinitionBase{
+        //holds our components
+        public List<IDefinitionComponentInterface> Components { get; set; } = [];
+        // Helper method to quickly find a specific component
+        public T GetComponent<T>() where T : IDefinitionComponentInterface {
+            return Components.OfType<T>().FirstOrDefault();
+        }
+    }
+}
+
+
+==============================================================================
 FILE: ProjWizInc.Core\Definitions\Common\IDefinitionComponentInterface.cs
 ==============================================================================
 using ProjWizInc.Core.Definitions.Components;
@@ -16,6 +213,8 @@ namespace ProjWizInc.Core.Definitions.Common {
     [JsonDerivedType(typeof(PayoutComponent), "payout")]
     [JsonDerivedType(typeof(RequiresTicksComponent), "ticks")]
     public interface IDefinitionComponentInterface {
+        //for our OCP, we can use this to identify the type of component for fetching during hotpath
+        //int ComponentTypeId { get; }
         //we can add some fields here later like name or description for tooltips or flavor
     }
 }
@@ -437,164 +636,6 @@ namespace ProjWizInc.Core.Managers {
         public TimeState GetTimeState() {
             return _time.State;
         }
-    }
-}
-
-
-==============================================================================
-FILE: ProjWizInc.Core\Managers\EconomyManager.cs
-==============================================================================
-using ProjWizInc.Core.ADT;
-using ProjWizInc.Core.Data;
-using ProjWizInc.Core.Definitions;
-using ProjWizInc.Core.Events;
-using ProjWizInc.Core.States.Managers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Resources;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ProjWizInc.Core.Managers {
-
-    
-    public class EconomyManager{
-        private readonly EventManager _events;
-        private readonly EconomyState _state;
-        private readonly object _lock = new ();
-        public EconomyManager(EventManager events, EconomyState state) {
-            _state = state; ;
-            _events = events;
-            _events.Subscribe<UpdateLogicEvent>(Update);
-            _events.Subscribe<ResourceGainedEvent>(AddResource);
-        }
-        public EconomyState State => _state;
-        //we have to use a small paremeter here, even if we dont need anything, because of signalling reasons
-        //but if we change UpdateFrameEvent with parameters later, we can check it with e
-        public void Update(UpdateLogicEvent e) {
-            
-        }
-        private void AddResource(ResourceGainedEvent e) {
-            lock (_lock) {
-                if (e.Id >= _state.Resources.Length) {
-                    throw new IndexOutOfRangeException("Attempted to access resource at index "+ e.Id+". There are" +
-                        "only "+_state.Resources.Length + " resource types");
-                }
-                _state.Resources[e.Id] += e.Amount;
-            }            
-        }
-        public BigNum GetResource(int resourceID) {
-            lock (_lock) {
-                if (resourceID >= _state.Resources.Length) {
-                    throw new IndexOutOfRangeException("Attempted to access resource at index " + resourceID + ". There are" +
-                        "only " + _state.Resources.Length + " resource types");
-                }
-                return _state.Resources[resourceID];
-            }
-           
-
-        }
-
-    }
-}
-
-
-==============================================================================
-FILE: ProjWizInc.Core\Managers\EventManager.cs
-==============================================================================
-using System;
-using System.Collections.Generic;
-
-namespace ProjWizInc.Core.Managers {
-    /*
-     * So the way the EventBroker works is basically as a broker
-     * During bootup, Module A Subcribes to the EventBroker with an EventName and Function
-     * IE: The renderer subscribes "RenderFramePls", RenderFrame(), and waits
-     * During runtime, Module B publishes to the EventBroker with an EventName and Argument
-     * IE: The tick manager decides that it is time for the next frame to be rendered, and publishes
-     * "RenderFramePls",SomeData.
-     * The EventBroker then sees that "RenderFramePls" is in the subscriptions, and runs RenderFrame()
-     * TLDR: Subscription is "do thing if this event" and publishing is "this event happened"
-     *
-     * 2nd pass, now with funky typing instead of plain strings for event names
-     * our subscriptions are now based on Type and Delegate
-     * Type is typeOf(something), and Delegate is the parent of Action, because idk
-     * Also, upgraded to a singleton so we have global access to all events for everyone
-     * 
-     * 3rd pass, apparently using new 160 times a second causes problems for the GC, so we swap to an array instead
-     * it bypasses collection change errors by using an array. if any changes happen, the currently running publish
-     * will continue working with the old array, and use the new array next loop
-     */
-    public class EventManager{
-        private readonly Dictionary<Type, Delegate[]> _subscribers = [];
-        //we use this funky thing as a lock to make it thread safe and prevent race conditions
-        private readonly object _lock = new();
-        public void Subscribe<T>(Action<T> handler) {
-            var type = typeof(T);
-            lock (_lock) {
-                //like before, we check if the Event(type) already exists, and create it if it doesnt
-                if (!_subscribers.TryGetValue(type, out var oldArray)) {
-                    oldArray = Array.Empty<Delegate>();
-                }
-                //then we add a new Function(handler) used to be called callback
-                //but now in the 3rd pass, we aren using a list anymore, so we gotta do an old school manual array
-                //expansion
-                var newArr = new Delegate[oldArray.Length + 1];
-                Array.Copy(oldArray, newArr, oldArray.Length);
-                newArr[^1] = handler;
-                _subscribers[type] = newArr;
-                //this does have the old heap problem, but subs dont run 160hz
-            }
-
-        }
-        public void Unsubscribe<T>(Action<T> handler) {
-            var type = typeof(T);
-            lock (_lock) {
-                if (_subscribers.TryGetValue(type, out var oldArray)) {
-                    // Find where this handler lives in our array
-                    int index = Array.IndexOf(oldArray, handler);
-                    if (index >= 0) {
-                        // If it's the last subscriber standing, remove the event completely
-                        if (oldArray.Length == 1) {
-                            _subscribers.Remove(type);
-                        } else {
-                            // Otherwise, allocate a new array (-1 size) and skip the removed handler
-                            var newArray = new Delegate[oldArray.Length - 1];
-
-                            // Copy everything before the removed item
-                            if (index > 0) {
-                                Array.Copy(oldArray, 0, newArray, 0, index);
-                            }
-                            // Copy everything after the removed item
-                            if (index < oldArray.Length - 1) {
-                                Array.Copy(oldArray, index + 1, newArray, index, oldArray.Length - index - 1);
-                            }
-
-                            _subscribers[type] = newArray; // Atomic pointer swap
-                        }
-                    }
-                } else {
-                    // log if we tried to unsubscribe from something that was never subscribed
-                }
-            }
-            
-        }
-        public void Publish<T>(T eventArgs) {
-            Delegate[]? handlers;
-            lock (_lock) {
-                _subscribers.TryGetValue(typeof(T), out handlers);
-            }
-            // Iterates directly over the array for zero-allocation
-            if (handlers != null) {
-                foreach (var h in handlers) {
-                    ((Action<T>)h)(eventArgs);
-                }
-            }
-
-        }
-
-
     }
 }
 

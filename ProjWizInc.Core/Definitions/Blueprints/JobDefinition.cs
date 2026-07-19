@@ -7,6 +7,6 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Blueprints {
     public class JobDefinition : DefinitionEntity {
-        
+        public JobDefinition() { }
     }
 }

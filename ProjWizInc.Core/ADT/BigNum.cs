@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Reflection.Metadata;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Runtime.InteropServices;
 
 namespace ProjWizInc.Core.ADT {
     // 1. Special states for division-by-zero or mathematical failures
@@ -77,7 +70,7 @@ namespace ProjWizInc.Core.ADT {
                 return;
             }
 
-            if (absVal > THRESHOLD_LOW && absVal < THRESHOLD_HIGH) {
+            if (absVal >= THRESHOLD_LOW && absVal < THRESHOLD_HIGH) {
                 _small = value;
                 _isLarge = false;
                 //TODO: is neccesary?
@@ -196,7 +189,7 @@ namespace ProjWizInc.Core.ADT {
             //if the difference is too big, we can just return the larger number, because the smaller number is negligible
             if (diff > THRESH_POW) { return a; }
             //same with the other way around, if b is larger than a, we can just return b
-            if (diff < -THRESH_POW) { return b; }
+            if (diff < -THRESH_POW) { return -b; }
             return new BigNum(man1 - (man2 / GetPowerOf10(diff)), exp1);
         }
         public static BigNum operator --(BigNum a) {
@@ -285,10 +278,10 @@ namespace ProjWizInc.Core.ADT {
             return b > a;
         }
         public static bool operator >=(BigNum a, BigNum b) {
-           return (a > b) || (a == b);
+            return !(a < b);
         }
         public static bool operator <=(BigNum a, BigNum b) {
-            return (a < b) || (a == b);
+            return !(a > b);
         }
         //unary negation operator, that just flips the sign of the number
         public static BigNum operator -(BigNum a) {
@@ -321,7 +314,7 @@ namespace ProjWizInc.Core.ADT {
         }
         // Explicit cast to int
         public static explicit operator int(BigNum value) {
-            return ((int)value);
+            return (int)((long)value);//kinda funky, but is neccesary because it calls itself otherwise
         }
         public static BigNum Abs(BigNum value) {
             if (value._isLarge) {

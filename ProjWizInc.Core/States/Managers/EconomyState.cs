@@ -8,6 +8,6 @@ using System.Threading.Tasks;
 namespace ProjWizInc.Core.States.Managers {
     public class EconomyState {
         //changed the dictionary to using ints instead of strings for faster searching
-        public BigNum[]? Resources { get; set; }
+        public DualKeyMap<BigNum> Resources { get; set; }
     }
 }

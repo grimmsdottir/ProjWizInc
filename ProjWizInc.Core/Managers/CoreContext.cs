@@ -55,7 +55,7 @@ namespace ProjWizInc.Core.Managers {
         public void Publish<T>(T eventArgs) {
             _event.Publish(eventArgs);
         }
-        internal T GetDefinition<T>(int id) where T : DefinitionBase {
+        internal T GetDefinition<T>(int id) where T : DefinitionBase, new(){
             return _defs.GetDefinition<T>(id);
         }
         internal int GetDefinitionCount<T>() where T : DefinitionBase {

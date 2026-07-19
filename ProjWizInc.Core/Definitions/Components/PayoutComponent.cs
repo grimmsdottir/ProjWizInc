@@ -10,9 +10,9 @@ using System.Text.Json.Serialization;
 namespace ProjWizInc.Core.Definitions.Components {
     
     public class PayoutComponent : IDefinitionComponentInterface, ILinkableDefinitionInterface {
-        public List<ResourcePayoutEntry> PayoutEntries { get; internal set; } = [];
+        public List<ResourceAdjustmentEntry> PayoutEntries { get; internal set; } = [];
         public void ResolveLinks(DefinitionManager manager) {
-            foreach (ResourcePayoutEntry entry in PayoutEntries) {
+            foreach (ResourceAdjustmentEntry entry in PayoutEntries) {
                 entry.ResourceID = manager.GetID<ResourceDefinition>(entry.ResourceKey);
             }   
         }

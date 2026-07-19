@@ -20,38 +20,51 @@ namespace xUnitTester {
         public const int TEST_JOB_ID = 0;
         public static readonly BigNum TEST_PAYOUT_AMOUNT = new BigNum(12.34);
         public static readonly BigNum TEST_REQUIRED_TICKS = new BigNum(100);
-        public static ResourceDefinition CreateTestGoldResourceDefinition() {
-            ResourceDefinition testGold = new ResourceDefinition();
-            testGold.Key = TEST_GOLD_KEY;
-            testGold.Id = TEST_GOLD_ID;
-            return testGold;
+        public static ResourceDefinition CreateTestResouceDef(string key, int id) {
+            ResourceDefinition testResDef = new ResourceDefinition();
+            testResDef.Key = key;
+            testResDef.Id = id;
+            return testResDef;
         }
-        public static ResourcePayoutEntry CreateTestPayoutEntry() {
-            ResourceDefinition testGold = CreateTestGoldResourceDefinition();
-            ResourcePayoutEntry testPayoutEntry = new ResourcePayoutEntry();
-            testPayoutEntry.ResourceKey = testGold.Key;
-            testPayoutEntry.ResourceID = testGold.Id;
-            testPayoutEntry.Amount = TEST_PAYOUT_AMOUNT;
-            return testPayoutEntry;
+        public static ResourceAdjustmentEntry CreateTestResourceAdjustmentEntry(string resKey, int resId, BigNum amount) {
+            ResourceDefinition testResDef = CreateTestResouceDef(resKey, resId);
+            ResourceAdjustmentEntry testResAdjEntry = new ResourceAdjustmentEntry();
+            testResAdjEntry.ResourceID = resId;
+            testResAdjEntry.Amount = amount;
+            testResAdjEntry.ResourceKey = resKey;
+            return testResAdjEntry;
         }
-        public static PayoutComponent CreateTestPayoutComponent() {
+        public static PayoutComponent CreateTestPayoutComponent(ResourceAdjustmentEntry resourceAdjustmentEntry) {
             PayoutComponent testPayoutComponent = new PayoutComponent();
-            testPayoutComponent.PayoutEntries.Add(CreateTestPayoutEntry());
+            testPayoutComponent.PayoutEntries.Add(resourceAdjustmentEntry);
             return testPayoutComponent;
         }
-        public static RequiresTicksComponent CreateTestTicksComponent() {
+        public static PayoutComponent CreateTestPayoutComponent(ResourceAdjustmentEntry[] resourceAdjustmentEntries) {
+            PayoutComponent testPayoutComponent = new PayoutComponent();
+            foreach (ResourceAdjustmentEntry entry in resourceAdjustmentEntries) {
+                testPayoutComponent.PayoutEntries.Add(entry); 
+            }
+            return testPayoutComponent;
+        }
+        public static RequiresTicksComponent CreateTestTicksComponent(BigNum ticks) {
             RequiresTicksComponent testTicksComponent = new RequiresTicksComponent();
-            testTicksComponent.RequiredTicks = TEST_REQUIRED_TICKS;
+            testTicksComponent.RequiredTicks = ticks;
             return testTicksComponent;
         }
-        public static JobDefinition CreateTestJobDefinition() {
+        public static JobDefinition CreateTestJobDefinition(
+            string jobKey,
+            int jobId,
+            List<IDefinitionComponentInterface> components
+            ) {
             JobDefinition testJob = new JobDefinition();
-            testJob.Key = TEST_JOB_KEY;
-            testJob.Id = TEST_JOB_ID;
-            testJob.Components.Add(CreateTestPayoutComponent());
-            testJob.Components.Add(CreateTestTicksComponent());
+            testJob.Id = jobId;
+            testJob.Key = jobKey;
+            foreach (IDefinitionComponentInterface component in components) {
+                testJob.Components.Add(component);
+            }
             return testJob;
         }
+        public static GameDefinitions CreateTestGameDefinitions(List<>)
         public static IEnumerable<object[]> GetValidDefinitions() {
             List<object[]> testData = new List<object[]>();
 
@@ -87,10 +100,8 @@ namespace xUnitTester {
         }
         public static DefinitionManager CreateTestingDefinitionManager() {
             BigNum AMOUNT = new BigNum(69.69);
-            //to build a DefinitionManager, we need a whole bunch of stuff
-            //first are the dicts
-            Dictionary<Type, Dictionary<string, int>> typeKeyIdMap = [];
-            Dictionary<Type, Array> typeIdDefMap = [];
+            Dictionary<Type,IDualKeyMap> defManagerData = new Dictionary<Type,IDualKeyMap>();
+
             //manually create some testing definitions
             ResourceDefinition testGold = CreateTestGoldResourceDefinition();
             //jobs are quite a bit more complex because of their components
@@ -105,18 +116,9 @@ namespace xUnitTester {
             Dictionary<string, int> jobKeyIdMap = [];
             jobKeyIdMap.Add(testJob.Key, testJob.Id);
 
-            typeIdDefMap.Add(typeof(ResourceDefinition), resourceIdDefMap);
-            typeKeyIdMap.Add(typeof(ResourceDefinition), resourceKeyIdMap);
 
-            typeIdDefMap.Add(typeof(JobDefinition), jobIdDefMap);
-            typeKeyIdMap.Add(typeof(JobDefinition), jobKeyIdMap);
 
-            return new DefinitionManager(typeKeyIdMap, typeIdDefMap);
+            return new DefinitionManager(defManagerData);
         }
-        /*
-        public static JobManager CreateTestJobManager() {
-            JobManager testJobManager = new JobManager()
-        }
-        */
     }
 }

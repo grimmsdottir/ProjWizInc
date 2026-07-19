@@ -4,8 +4,6 @@ VisualStudioVersion = 17.8.34309.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProjWizInc.Core", "ProjWizInc.Core\ProjWizInc.Core.csproj", "{A1E1D5F7-8B3E-4C2F-9E8D-7C5F2A1B3D9E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AvaloniaApplication1", "AvaloniaApplication1\AvaloniaApplication1.csproj", "{F64802B7-CB15-4773-9C56-ED60EC95E399}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "xUnitTester", "xUnitTester\xUnitTester.csproj", "{127EA515-196E-4970-8148-1F296D2E2CEA}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Testertron", "Testertron\Testertron.csproj", "{AB8327B5-7F48-4C11-ADE1-408AC37CFA72}"
@@ -20,10 +18,6 @@ Global
 		{A1E1D5F7-8B3E-4C2F-9E8D-7C5F2A1B3D9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1E1D5F7-8B3E-4C2F-9E8D-7C5F2A1B3D9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1E1D5F7-8B3E-4C2F-9E8D-7C5F2A1B3D9E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F64802B7-CB15-4773-9C56-ED60EC95E399}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F64802B7-CB15-4773-9C56-ED60EC95E399}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F64802B7-CB15-4773-9C56-ED60EC95E399}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F64802B7-CB15-4773-9C56-ED60EC95E399}.Release|Any CPU.Build.0 = Release|Any CPU
 		{127EA515-196E-4970-8148-1F296D2E2CEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{127EA515-196E-4970-8148-1F296D2E2CEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{127EA515-196E-4970-8148-1F296D2E2CEA}.Release|Any CPU.ActiveCfg = Release|Any CPU

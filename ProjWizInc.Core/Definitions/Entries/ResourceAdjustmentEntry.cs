@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Core.Definitions.Entries {
-    public class ResourcePayoutEntry : IEntryInterface {
+    public class ResourceAdjustmentEntry : IEntryInterface {
         public string ResourceKey { get; set; }
         public BigNum Amount { get; set; }
         //we ignore resourceIDs because it is generated on bootup and not important

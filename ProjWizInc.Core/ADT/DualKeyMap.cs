@@ -56,8 +56,10 @@ namespace ProjWizInc.Core.ADT {
         public System.Array RawArray {
             get { return _values; }
         }
-        public Dictionary<string,int> GetKeyIdMap() {
-            return _keyIdMap;
+        public Dictionary<string, int> KeyIdMap {
+            get {
+                return _keyIdMap;
+            }
         }
         //this lets us use DualKeyMap like an array, so we can do dualKeyMap[id] to get the value
         //we route our indexer through our getters and setter for future-proofing, in case we want to add validation or logging later
@@ -201,7 +203,7 @@ namespace ProjWizInc.Core.ADT {
         }
         //allows the bootstrapper to derive a definition's Id from its key
         public int GetId(string key) {
-            if (!ContainsKey(key)) {
+            if (key == null || !ContainsKey(key)) {
                 throw new KeyNotFoundException(key +" could not be found");
             }
             return _keyIdMap[key];

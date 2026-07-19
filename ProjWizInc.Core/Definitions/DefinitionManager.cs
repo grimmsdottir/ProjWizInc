@@ -9,7 +9,7 @@ namespace ProjWizInc.Core.Definitions {
 
     public class DefinitionManager {
         private readonly Dictionary<Type, IDualKeyMap> _typeMaps;
-
+        //instead of the old double dicts, we know use a single dict which is just type and IDualKey
         public DefinitionManager(Dictionary<Type, IDualKeyMap> typeMaps) {
             if (typeMaps == null) {
                 throw new ArgumentNullException("typeMaps", "[DefinitionManager] Registry cannot be null.");

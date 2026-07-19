@@ -19,6 +19,18 @@ namespace xUnitTester.ADT {
         private Dictionary<string, TestStruct> ExecuteDeyhdration() {
             return _testMap.Dehydrate();
         }
+        private string _getIdTargetKey;
+
+        private void ExecuteGetIdThrows() {
+            _testMap.GetId(_getIdTargetKey);
+        }
+
+        private Dictionary<string, TestStruct> _gapHydrateData;
+        private bool _gapHydrateExpectingMissing;
+
+        private void ExecuteHydrateWithGapThrows() {
+            _testMap.Hydrate(_gapHydrateData, _gapHydrateExpectingMissing);
+        }
         [Theory]
         [InlineData(false)] // Scenario 1: Sequential IDs -> Successful Dehydration
         [InlineData(true)]  // Scenario 2: Unmapped ID Gap -> Fail-Fast Exception
@@ -33,7 +45,7 @@ namespace xUnitTester.ADT {
                 testKeyIdMap.Add(WOOD, 1);
             }
             _testMap = new DualKeyMap<TestStruct>(testKeyIdMap);
-            TestStruct goldStruct  = new TestStruct(500);
+            TestStruct goldStruct = new TestStruct(500);
             _testMap[0] = goldStruct;
             if (introduceIdGap) {
                 TestStruct woodStruct = new TestStruct(200);
@@ -45,9 +57,9 @@ namespace xUnitTester.ADT {
             if (introduceIdGap) {
                 Assert.Throws<InvalidOperationException>(ExecuteDeyhdration);
             } else {
-                Dictionary<string,TestStruct> saveData = _testMap.Dehydrate();  
+                Dictionary<string, TestStruct> saveData = _testMap.Dehydrate();
                 Assert.NotNull(saveData);
-                Assert.Equal(2,saveData.Count);
+                Assert.Equal(2, saveData.Count);
 
                 Assert.Equal(500, saveData[GOLD].value);
                 Assert.Equal(200, saveData[WOOD].value);
@@ -385,5 +397,100 @@ namespace xUnitTester.ADT {
             // 3. Assert: Verify the returned status matches expectations
             Assert.Equal(expectedResult, result);
         }
-    }
+    [Fact]
+        public void TestPropertiesExposed() {
+            // 1. Arrange: Setup mappings
+            Dictionary<string, int> testKeyIdMap = new Dictionary<string, int>();
+            testKeyIdMap.Add(GOLD, 0);
+
+            DualKeyMap<TestStruct> map = new DualKeyMap<TestStruct>(testKeyIdMap);
+
+            // 2. Act & Assert: Verify RawArray property
+            System.Array raw = map.RawArray;
+            Assert.NotNull(raw);
+            Assert.Equal(1, raw.Length);
+
+            // 3. Act & Assert: Verify KeyIdMap property
+            Dictionary<string, int> exposedMap = map.KeyIdMap;
+            Assert.NotNull(exposedMap);
+            Assert.True(exposedMap.ContainsKey(GOLD));
+            Assert.Equal(0, exposedMap[GOLD]);
+        }
+
+        [Fact]
+        public void TestConstructorWithEmptyMap() {
+            // 1. Arrange: Setup an empty mapping dictionary
+            Dictionary<string, int> emptyMap = new Dictionary<string, int>();
+
+            // 2. Act: Construct the map
+            DualKeyMap<TestStruct> map = new DualKeyMap<TestStruct>(emptyMap);
+
+            // 3. Assert: Verify the dynamic array derives a size of 0
+            Assert.Equal(0, map.Length);
+            Assert.NotNull(map.RawArray);
+            Assert.Equal(0, map.RawArray.Length);
+        }
+
+        [Fact]
+        public void TestGetIdValidPath() {
+            // 1. Arrange: Setup mappings
+            Dictionary<string, int> testKeyIdMap = new Dictionary<string, int>();
+            testKeyIdMap.Add(GOLD, 0);
+            testKeyIdMap.Add(WOOD, 1);
+            _testMap = new DualKeyMap<TestStruct>(testKeyIdMap);
+
+            // 2. Act & Assert: Verify index resolution
+            Assert.Equal(0, _testMap.GetId(GOLD));
+            Assert.Equal(1, _testMap.GetId(WOOD));
+        }
+
+        [Theory]
+        [InlineData("stone")] // Scenario 1: Non-existent key lookup
+        [InlineData(null)]    // Scenario 2: Null key lookup
+        public void TestGetIdInvalidPathsThrowsException(string invalidKey) {
+            // 1. Arrange: Setup mappings
+            Dictionary<string, int> testKeyIdMap = new Dictionary<string, int>();
+            testKeyIdMap.Add(GOLD, 0);
+            _testMap = new DualKeyMap<TestStruct>(testKeyIdMap);
+            _getIdTargetKey = invalidKey;
+
+            // 2. Act & Assert: Verify KeyNotFoundException is raised safely
+            Assert.Throws<KeyNotFoundException>(ExecuteGetIdThrows);
+        }
+
+        [Fact]
+        public void TestContainsIdWithGaps() {
+            // 1. Arrange: Setup mappings containing an unmapped slot gap at ID 1
+            Dictionary<string, int> testKeyIdMap = new Dictionary<string, int>();
+            testKeyIdMap.Add(GOLD, 0);
+            testKeyIdMap.Add(WOOD, 2);
+            _testMap = new DualKeyMap<TestStruct>(testKeyIdMap);
+
+            // 2. Act & Assert: Verify that ContainsId returns false for unmapped gap indices
+            Assert.True(_testMap.ContainsId(0));
+            Assert.False(_testMap.ContainsId(1)); // ID 1 represents the unmapped gap slot
+            Assert.True(_testMap.ContainsId(2));
+            Assert.False(_testMap.ContainsId(3)); // Out-of-bounds index
+        }
+
+        [Theory]
+        [InlineData(true)]  // Scenario 1: Gap detected when expecting missing data
+        [InlineData(false)] // Scenario 2: Gap detected when not expecting missing data
+        public void TestHydrateWithGapsThrowsException(bool expectingMissing) {
+            // 1. Arrange: Setup a broken runtime state with an ID gap at index 1
+            Dictionary<string, int> testKeyIdMap = new Dictionary<string, int>();
+            testKeyIdMap.Add(GOLD, 0);
+            testKeyIdMap.Add(WOOD, 2);
+            _testMap = new DualKeyMap<TestStruct>(testKeyIdMap);
+
+            // 2. Arrange: Build valid save data matching structural keys
+            _gapHydrateData = new Dictionary<string, TestStruct>();
+            _gapHydrateData.Add(GOLD, new TestStruct(10));
+            _gapHydrateData.Add(WOOD, new TestStruct(20));
+            _gapHydrateExpectingMissing = expectingMissing;
+
+            // 3. Act & Assert: Verify Hydrate fails-fast with an InvalidOperationException due to the configuration gap
+            Assert.Throws<InvalidOperationException>(ExecuteHydrateWithGapThrows);
+        }
+    } 
 }

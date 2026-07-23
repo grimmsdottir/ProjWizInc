@@ -1,0 +1,168 @@
+// PROJECT DEPENDENCIES
+Project: Engine.csproj
+  - System.Text.Json (v10.0.10)
+
+
+// File: Data\ADT\BigNum.cs
+
+namespace ProjWizInc.Engine.Data.ADT{public enum NumericState:byte{Normal=0,NaN=1,PositiveInfinity=2,NegativeInfinity=3}[StructLayout(LayoutKind.Sequential,Pack=8)]public readonly record struct BigNum{private static readonly double[]PowersOf10;private const int MIN_POWER;private const int MAX_POWER;private const int BIAS;private const double THRESHOLD_HIGH;private const double THRESHOLD_LOW;private const int THRESH_POW;private const double EPSILON;private readonly double _small;private readonly double _man;private readonly int _exp;private readonly bool _isLarge;private readonly bool _isNegative;private readonly NumericState _state;private readonly byte _towerLevel;static BigNum(){}public static double GetPowerOf10(int power){}public double Small;public double Man;public int Exp;public bool IsLarge;public bool IsNegative;public BigNum():this(0){}public BigNum(int value):this((double)value){}public BigNum(long value):this((double)value){}public BigNum(double value){}public BigNum(double man,int exp){}public BigNum(string s){}public static BigNum operator+(BigNum a,BigNum b){}public static BigNum operator++(BigNum a){}public static BigNum operator-(BigNum a,BigNum b){}public static BigNum operator--(BigNum a){}public static BigNum operator*(BigNum a,BigNum b){}public static BigNum operator/(BigNum a,BigNum b){}public static BigNum operator %(BigNum a,BigNum b){}public static bool operator>(BigNum a,BigNum b){}public static bool operator<(BigNum a,BigNum b){}public static bool operator>=(BigNum a,BigNum b){}public static bool operator<=(BigNum a,BigNum b){}public static BigNum operator-(BigNum a){}public static explicit operator double(BigNum value){}public static explicit operator long(BigNum value){}public static explicit operator int(BigNum value){}public static BigNum Abs(BigNum value){}public static BigNum Max(BigNum a,BigNum b){}public static BigNum Min(BigNum a,BigNum b){}public static BigNum Clamp(BigNum value,BigNum min,BigNum max){}public static BigNum Floor(BigNum value){}public static BigNum Ceiling(BigNum value){}public static BigNum Pow(BigNum baseVal,int power){}public static BigNum Pow(BigNum baseVal,double power){}public bool Equals(BigNum other){}public override int GetHashCode();public static BigNum Parse(string s){}public override string ToString(){}public string ToScientific(bool truncate){}public static implicit operator BigNum(long v);public static implicit operator BigNum(double v);}}
+
+// File: Data\ADT\DualKeyMap.cs
+
+namespace ProjWizInc.Engine.Data.ADT{public class DualKeyMap<TValue>where TValue:new(){private readonly TValue[]_idValueMap;private readonly Dictionary<string,int>_keyIdMap;private readonly string[]_idKeyMap;public DualKeyMap(string[]idKeyMap){}public System.Array RawArray{}public IReadOnlyList<TValue>Values{}public Dictionary<string,int>KeyIdMap{}public TValue this[int id]{}[MethodImpl(MethodImplOptions.AggressiveInlining)]public TValue GetValue(int id){}[MethodImpl(MethodImplOptions.AggressiveInlining)]public void SetValue(int id,TValue value){}public int Length{}public TValue GetValue(string key){}public void SetValue(string key,TValue value){}public bool TryGetValue(int id,out TValue value){}public bool TryGetValue(string key,out TValue value){}public bool ContainsKey(string key){}public bool ContainsId(int id){}public void Hydrate(Dictionary<string,TValue>keyValueMap,bool expectingMissing){}public Dictionary<string,TValue>Dehydrate(){}public int GetId(string key){}public string GetKey(int id){}public void Reset(){}}}
+
+// File: Data\Configs\GlobalConfigs.cs
+
+namespace ProjWizInc.Engine.Data.Configs{public static class GlobalConfigs{public static readonly string DEFS_FOLDER;public static readonly string SAVE_FOLDER;public const int TARGET_TPS;public const double TICK_LENGTH;public const double MAX_BURST;public const int TARGET_PPS;public const double PRESENTATION_LENGTH;}}
+
+// File: Data\Definitions\DefinitionCatalog.cs
+
+namespace ProjWizInc.Engine.Data.Definitions{public class DefinitionCatalog{public List<ResourceDef>resourceDefs;public List<JobDef>jobDefs;}}
+
+// File: Data\Definitions\Commons\CompositeDefinition.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Commons{public class CompositeDefinition:DefinitionBase{public List<ISpecification>Specifications{}public T GetSpecification<T>()where T:ISpecification{}}}
+
+// File: Data\Definitions\Commons\DefinitionBase.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Commons{public class DefinitionBase{public string Key{};public string DisplayName{};public int Id{};public DefinitionBase(){}public DefinitionBase(string key,int id){}}}
+
+// File: Data\Definitions\Defs\JobDef.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Defs{public class JobDef:CompositeDefinition{}}
+
+// File: Data\Definitions\Defs\ResourceDef.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Defs{public class ResourceDef:DefinitionBase{}}
+
+// File: Data\Definitions\Specifications\PayoutSpec.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Specifications{public class PayoutSpec:ISpecification,IRequiresLinking{public ResourceEntry[]PayoutEntries;public void ResolveLinks(DefinitionRegistry registry){}}}
+
+// File: Data\Definitions\Specifications\TickProgressionSpec.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Specifications{public class TickProgressionSpec:ISpecification{public int FinishTicks;public int CurrentTicks;}}
+
+// File: Data\Definitions\Specifications\Interfaces\IRequiresLinking.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Specifications.Interfaces{public interface IRequiresLinking{void ResolveLinks(DefinitionRegistry registry);}}
+
+// File: Data\Definitions\Specifications\Interfaces\ISpecification.cs
+
+namespace ProjWizInc.Engine.Data.Definitions.Specifications.Interfaces{[JsonPolymorphic(TypeDiscriminatorPropertyName="$type")][JsonDerivedType(typeof(PayoutSpec),"payout")][JsonDerivedType(typeof(TickProgressionSpec),"tickProgression")]public interface ISpecification{}}
+
+// File: Data\Entries\ResourceEntry.cs
+
+namespace ProjWizInc.Engine.Data.Entries{public class ResourceEntry{[JsonIgnore]public int Id{}public string Key{}public BigNum Amount{}}}
+
+// File: Simulation\Bootstrapper\Bootstrapper.cs
+
+namespace ProjWizInc.Engine.Simulation.Bootstrapper{public static partial class Bootstrapper{private const string DEFS_FOLDER;private const string SAVE_FOLDER;public static CoreContext CreateCoreContext(bool isRaw,bool isNew){}public static CoreContext CreateCoreContext(DefinitionCatalog definitionCatalog,StateRoot stateRoot){}}}
+
+// File: Simulation\Bootstrapper\Bootstrapper.Defs.cs
+
+namespace ProjWizInc.Engine.Simulation.Bootstrapper{public class JobTypeHandler:DefinitionTypeHandler<JobDef>{public override List<JobDef>GetList(DefinitionCatalog catalog){}public override void SetList(DefinitionCatalog catalog,List<JobDef>list){}}public class ResourceTypeHandler:DefinitionTypeHandler<ResourceDef>{public override List<ResourceDef>GetList(DefinitionCatalog catalog){}public override void SetList(DefinitionCatalog catalog,List<ResourceDef>list){}}public interface IDefinitionTypeHandler{void Merge(DefinitionCatalog target,DefinitionCatalog source);void Populate(DefinitionCatalog catalog,DefinitionRegistry registry);void ResolveLinks(DefinitionRegistry registry);}public abstract class DefinitionTypeHandler<T>:IDefinitionTypeHandler where T:DefinitionBase,new(){public abstract List<T>GetList(DefinitionCatalog catalog);public abstract void SetList(DefinitionCatalog catalog,List<T>list);public void Merge(DefinitionCatalog target,DefinitionCatalog source){}public void Populate(DefinitionCatalog catalog,DefinitionRegistry registry){}public void ResolveLinks(DefinitionRegistry registry){}}public static partial class Bootstrapper{private static readonly IDefinitionTypeHandler[]_definitionTypes=new IDefinitionTypeHandler[]{};private static DefinitionCatalog GetRawDefs(){}private static DefinitionRegistry CreateDefinitionRegistry(DefinitionCatalog catalog){}private static void ResolveDefinitionRegistryLinks(DefinitionRegistry registry){}}}
+
+// File: Simulation\Bootstrapper\Bootstrapper.Simulators.cs
+
+namespace ProjWizInc.Engine.Simulation.Bootstrapper{public static partial class Bootstrapper{}}
+
+// File: Simulation\Bootstrapper\Bootstrapper.States.cs
+
+namespace ProjWizInc.Engine.Simulation.Bootstrapper{public class EconomyMutators{public delegate void AdjustResourceDelegate(int id,BigNum amount);public delegate bool TryAdjustResourceDelegate(int id,BigNum amount);public readonly AdjustResourceDelegate Adjust;public readonly TryAdjustResourceDelegate TryAdjust;public EconomyMutators(AdjustResourceDelegate adjust,TryAdjustResourceDelegate tryAdjust){}}public static partial class Bootstrapper{public static EconomyRecord CreateEconomyRecord(BigNum[]resources,out EconomyMutators mutators){}}}
+
+// File: Simulation\Core\CoreContext.cs
+
+namespace ProjWizInc.Engine.Simulation.Core{public class CoreContext{private DefinitionRegistry _definitionRegistry;private StateRoot _stateRoot;private EventHub _eventHub;private HeartbeatManager _heartbeatManager;public CoreContext(DefinitionRegistry definitionRegistry,StateRoot stateRoot,HeartbeatManager heartbeatManager){}public void Start(){}public long GetTicks(){}}}
+
+// File: Simulation\Core\HeartbeatManager.cs
+
+namespace ProjWizInc.Engine.Simulation.Core{public class HeartbeatManager{private double _timeAccumalator;private double _presentationTimer;private readonly Stopwatch _stopwatch;private CancellationTokenSource _cts;private IWriteTime _timeWriter;public int OfflineTicks{}public int FastForawardFactor{}public HeartbeatManager(IWriteTime timeWriter){}public void Start(){}private async Task GameLoop(CancellationToken token){}private void PreTick(){}private void Tick(){}private void PostTick(){}private void Present(){}}}
+
+// File: Simulation\Events\EventHub.cs
+
+namespace ProjWizInc.Engine.Simulation.Events{public class EventHub:ISubscribeEvents,IPublishEvents{private readonly Dictionary<Type,Delegate[]>_subscribers;public EventHub(){}public void Subscribe<T>(Action<T>action){}public void Unsubscribe<T>(Action<T>action){}public void Publish<T>(T eventArgs){}}}
+
+// File: Simulation\Events\EventPublisher.cs
+
+namespace ProjWizInc.Engine.Simulation.Events{public class EventPublisher{private readonly IPublishEvents _publisher;private readonly IReadEconomy _economy;private readonly EconomyRecord _economySnapshot;public EventPublisher(IPublishEvents publisher,IReadEconomy economy){}public void Snapshot(){}public void PublishDelta(EventHub eventHub){}}}
+
+// File: Simulation\Events\IPublishEvents.cs
+
+namespace ProjWizInc.Engine.Simulation.Events{public interface IPublishEvents{public void Publish<T>(T eventArgs);}}
+
+// File: Simulation\Events\ISubscribeEvents.cs
+
+namespace ProjWizInc.Engine.Simulation.Events{public interface ISubscribeEvents{public void Subscribe<T>(Action<T>action);public void Unsubscribe<T>(Action<T>action);}}
+
+// File: Simulation\Persistence\BigNumJsonConverter.cs
+
+namespace ProjWizInc.Engine.Simulation.Persistence{public class BigNumJsonConverter:JsonConverter<BigNum>{public override BigNum Read(ref Utf8JsonReader reader,Type typeToConvert,JsonSerializerOptions options){}public override void Write(Utf8JsonWriter writer,BigNum value,JsonSerializerOptions options){}}}
+
+// File: Simulation\Persistence\SerialisationService.cs
+
+namespace ProjWizInc.Engine.Simulation.Persistence{public class SerialisationService{private readonly JsonSerializerOptions _options;public SerialisationService(){}public T?Load<T>(string filePath){}public string Serialize<T>(T obj){}}}
+
+// File: Simulation\Registries\DefinitionRegistry.cs
+
+namespace ProjWizInc.Engine.Simulation.Registries{public class DefinitionRegistry{private readonly Dictionary<Type,object>_registries;public void RegisterMap<T>(DualKeyMap<T>map)where T:class,new(){}public Dictionary<Type,object>Registries{}public DualKeyMap<T>GetMap<T>()where T:class,new(){}}}
+
+// File: Simulation\Tickers\JobTicker.cs
+
+namespace ProjWizInc.Engine.Simulation.Tickers{internal class JobTicker{}}
+
+// File: Simulation\Tickers\TimeTicker.cs
+
+namespace ProjWizInc.Engine.Simulation.Tickers{public class TimeTicker:ITimeTicker{private IWriteTime _timeWriter;public TimeTicker(IWriteTime timeWriter){}public void Tick(){}}}
+
+// File: Simulation\Tickers\Interfaces\ITimeTicker.cs
+
+namespace ProjWizInc.Engine.Simulation.Tickers.Interfaces{public interface ITimeTicker{}}
+
+// File: State\RecordRoot.cs
+
+namespace ProjWizInc.Engine.State{public class RecordRoot{public EconomyRecord Economy;public JobRecord Job;public TimeRecord Time;public RecordRoot(){}public RecordRoot(EconomyRecord economy,JobRecord job,TimeRecord time){}}}
+
+// File: State\StateRoot.cs
+
+namespace ProjWizInc.Engine.State{public class StateRoot{public RecordRoot records;public TallyRoot tallies;public StateRoot(){}}}
+
+// File: State\TallyRoot.cs
+
+namespace ProjWizInc.Engine.State{public class TallyRoot{public EconomyTally Economy;public JobTally Job;public TimeTally Time;public TallyRoot(){}public TallyRoot(EconomyTally economy,JobTally job,TimeTally time){}}}
+
+// File: State\Records\EconomyRecord.cs
+
+namespace ProjWizInc.Engine.State.Records{public class EconomyRecord:IReadEconomy{public BigNum[]Resources;public EconomyRecord(){}public EconomyRecord(int resourceCount){}public EconomyRecord(BigNum[]resources){}public void CopyTo(EconomyRecord copy){}public BigNum GetResource(int id){}public int GetResourceCount(){}public void AdjustResource(int id,BigNum amount){}public bool TryAdjustResource(int id,BigNum amount){}}}
+
+// File: State\Records\JobRecord.cs
+
+namespace ProjWizInc.Engine.State.Records{public class JobRecord{int ActiveId{}}}
+
+// File: State\Records\TimeRecord.cs
+
+namespace ProjWizInc.Engine.State.Records{public class TimeRecord:IReadTime,IWriteTime{private long _totalTicks;public long GetTime(){}public void AdvanceTime(){}}}
+
+// File: State\Records\Interfaces\IReadEconomy.cs
+
+namespace ProjWizInc.Engine.State.Records.Interfaces{public interface IReadEconomy{public BigNum GetResource(int id);public int GetResourceCount();public void CopyTo(EconomyRecord copy);}}
+
+// File: State\Records\Interfaces\IReadTime.cs
+
+namespace ProjWizInc.Engine.State.Records.Interfaces{public interface IReadTime{public long GetTime();}}
+
+// File: State\Records\Interfaces\IWriteTime.cs
+
+namespace ProjWizInc.Engine.State.Records.Interfaces{public interface IWriteTime{public void AdvanceTime();}}
+
+// File: State\Tallies\EconomyTally.cs
+
+namespace ProjWizInc.Engine.State.Sessions{public class EconomyTally{}}
+
+// File: State\Tallies\JobTally.cs
+
+namespace ProjWizInc.Engine.State.Tally{public class JobTally{}}
+
+// File: State\Tallies\TimeTally.cs
+
+namespace ProjWizInc.Engine.State.Tally{public class TimeTally{}}

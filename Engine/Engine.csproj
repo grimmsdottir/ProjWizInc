@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<RootNamespace>ProjWizInc.Engine</RootNamespace>
+	<AssemblyName>ProjWizInc.Engine</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Data\Events\" />
+    <Folder Include="Simulation\Flushers\" />
+    <Folder Include="Simulation\Handlers\" />
+    <Folder Include="State\Buffers\Interfaces\" />
+  </ItemGroup>
+    <ItemGroup>
+	    <!-- This tells the compiler that 'xUnitTester' is a trusted friend -->
+	    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+		    <_Parameter1>ProjWizInc.Engine.Tests</_Parameter1>
+	    </AssemblyAttribute>
+    </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="System.Text.Json" Version="10.0.10" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ProjWizInc.Generators\ProjWizInc.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+	</ItemGroup>
+</Project>

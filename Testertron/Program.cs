@@ -7,6 +7,7 @@ using ProjWizInc.Engine.Data.Configs;
 namespace ProjWizInc.Engine.ConsoleApp {
     public class Program {
         public static void Main(string[] args) {
+            TemplateGenerator.CreateTestDefs();
             Console.WriteLine("========================================");
             Console.WriteLine("  ProjWizInc: Idle Game Engine Boot  ");
             Console.WriteLine("========================================");

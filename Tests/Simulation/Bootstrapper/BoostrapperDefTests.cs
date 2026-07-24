@@ -97,10 +97,10 @@ namespace ProjWizInc.Engine.Tests.Simulation.Bootstrapper {
             ResourceEntry resourceEntry = new ResourceEntry();
             resourceEntry.Key = "gold";
             resourceEntry.Amount = new BigNum(100);
-            PayoutSpec payoutSpec = new PayoutSpec();
+            
             ResourceEntry[] resourceEntries = new ResourceEntry[1];
-            payoutSpec.PayoutEntries = resourceEntries;
-            payoutSpec.PayoutEntries[0] = resourceEntry;
+            resourceEntries[0] = resourceEntry;
+            PayoutSpec payoutSpec = new PayoutSpec(resourceEntries);
             JobDef jobDef = new JobDef();
             jobDef.Key = "mine";
             jobDef.Specifications.Add(payoutSpec);

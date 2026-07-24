@@ -26,4 +26,20 @@
 	<ItemGroup>
 		<ProjectReference Include="..\ProjWizInc.Generators\ProjWizInc.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
+	<ItemGroup>
+		<None Include="Defs\*.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	<ItemGroup>
+	  <Content Include="..\Defs\jobDefs.json" Link="jobDefs.json" />
+	</ItemGroup>
+	<ItemGroup>
+	  <None Update="Defs\jobDefs.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Defs\resourceDefs.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
 </Project>

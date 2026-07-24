@@ -1,0 +1,22 @@
+{
+  "jobDefs": [
+    {
+      "Specifications": [
+        {
+          "$type": "payout",
+          "PayoutEntries": [
+            {
+              "Key": "gold",
+              "Amount": "1e2"
+            }
+          ]
+        },
+        {
+          "$type": "tickProgression",
+          "FinishTicks": 100
+        }
+      ],
+      "Key": "mine"
+    }
+  ]
+}

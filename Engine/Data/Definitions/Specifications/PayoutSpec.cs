@@ -11,7 +11,11 @@ using System.Threading.Tasks;
 
 namespace ProjWizInc.Engine.Data.Definitions.Specifications {
     public class PayoutSpec :ISpecification,IRequiresLinking{
-        public ResourceEntry[] PayoutEntries { get; set; }
+        
+        public ResourceEntry[] PayoutEntries { get; init; }
+        public PayoutSpec(ResourceEntry[] payoutEntries) {
+            this.PayoutEntries = payoutEntries;
+        }
         public void ResolveLinks(DefinitionRegistry registry) {
             DualKeyMap<ResourceDef> resourceMap = registry.GetMap<ResourceDef>();
             for (int i = 0; i < PayoutEntries.Length; i++) {

@@ -25,6 +25,7 @@ namespace ProjWizInc.Engine.Data.ADT {
         //simplified constants for the threshold values, so we dont have to calculate them every time
         private const double THRESHOLD_HIGH = 1_000_000_000_000_000; // 1e15
         private const double THRESHOLD_LOW = 0.0001; //1e-4, we could use 1e-15, but visually 1e-4 is near the limit of human perception
+        private const double EQUAL_THRESH = 0.00000000000001; //1e-14. if the ratio of difference in numbers is lesser or equal than we accept that it is equal
         private const int THRESH_POW = 15;
         private const double EPSILON = 1e-15;
         // === INSTANCE FIELDS (Ordered descending by size for optimal 24-byte stack footprint) ===
@@ -422,7 +423,21 @@ namespace ProjWizInc.Engine.Data.ADT {
             //if they are both small numbers, we minus the two of them and if the difference is less than
             //the epsilon, its good enough to be equal
             if (!IsLarge) {
-                return Math.Abs(Small - other.Small) < EPSILON;
+                double diff = Math.Abs(Small - other.Small);
+                if (diff == 0) { return true; }
+                if (other > this) {
+                    if (diff / (Math.Abs((double)other)) <= EQUAL_THRESH) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    if (diff / Math.Abs(((double)this)) <= EQUAL_THRESH) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
             }
             //otherwise they are both big numbers
             if (_exp == other._exp) {

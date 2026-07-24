@@ -8,7 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\Engine\Defs\jobDefs.json" Link="Defs\jobDefs.json" />
+    <Content Include="..\Engine\Defs\resourceDefs.json" Link="Defs\resourceDefs.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Engine\Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Defs\" />
   </ItemGroup>
 
 </Project>

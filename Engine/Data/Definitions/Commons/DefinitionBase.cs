@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ProjWizInc.Engine.Data.Definitions.Commons {
@@ -10,6 +11,7 @@ namespace ProjWizInc.Engine.Data.Definitions.Commons {
      */
     public class DefinitionBase {
         public string Key { get; set; } = string.Empty;
+        [JsonIgnore]
         public int Id { get; set; } = -1;
         public DefinitionBase() {
         }

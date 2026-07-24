@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -10,6 +10,11 @@
 	  <RootNamespace>ProjWizInc.Engine.Tests</RootNamespace>
 	  <AssemblyName>ProjWizInc.Engine.Tests</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\Engine\Defs\jobDefs.json" Link="Defs\jobDefs.json" />
+    <Content Include="..\Engine\Defs\resourceDefs.json" Link="Defs\resourceDefs.json" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.0.1">
@@ -33,10 +38,10 @@
     <Folder Include="Data\Configs\" />
     <Folder Include="Data\Entries\" />
     <Folder Include="Data\Events\" />
+    <Folder Include="Defs\" />
     <Folder Include="Simulation\Core\" />
     <Folder Include="Simulation\Events\" />
     <Folder Include="Simulation\Handlers\" />
-    <Folder Include="Simulation\Persistence\" />
     <Folder Include="Simulation\Tickers\" />
     <Folder Include="State\Records\" />
     <Folder Include="State\Sessions\" />
